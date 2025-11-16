@@ -181,7 +181,13 @@ async function continuousAnalysis() {
         }
       }
 
-      logger.info(`Analyzed ${uniqueIps.length} unique IPs`);
+      // Detect distributed attacks (proxy/botnet patterns)
+      await detectDistributedAttack();
+      
+      // Detect credential stuffing
+      await detectCredentialStuffing();
+
+      logger.info(`Analyzed ${uniqueIps.length} unique IPs + distributed patterns`);
 
     } catch (error) {
       logger.error(`Error in continuous analysis: ${error.message}`);
@@ -214,6 +220,158 @@ async function detectBruteForce(ipAddress) {
     });
     
     logger.warn(`BRUTE FORCE DETECTED from ${ipAddress}: ${recentFailures.length} failed attempts`);
+  }
+}
+
+/**
+ * Detect distributed attacks (multiple IPs targeting same username)
+ * This catches proxy/botnet attacks that rotate IPs
+ */
+async function detectDistributedAttack() {
+  try {
+    // Get all failed logins in last 10 minutes
+    const query = `
+      SELECT username_attempted, ip_address, created_at
+      FROM auth_logs
+      WHERE success = false
+        AND event_type = 'login_failure'
+        AND created_at > NOW() - INTERVAL '10 minutes'
+      ORDER BY created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    const attempts = result.rows;
+    
+    if (attempts.length < 15) {
+      return; // Not enough data
+    }
+    
+    // Group by username
+    const usernameAttacks = {};
+    for (const attempt of attempts) {
+      const username = attempt.username_attempted;
+      if (!usernameAttacks[username]) {
+        usernameAttacks[username] = {
+          ips: new Set(),
+          count: 0,
+          timestamps: []
+        };
+      }
+      usernameAttacks[username].ips.add(attempt.ip_address);
+      usernameAttacks[username].count++;
+      usernameAttacks[username].timestamps.push(new Date(attempt.created_at));
+    }
+    
+    // Detect distributed attacks
+    for (const [username, data] of Object.entries(usernameAttacks)) {
+      const uniqueIps = data.ips.size;
+      const totalAttempts = data.count;
+      
+      // Distributed attack indicators:
+      // 1. Multiple IPs (3+) targeting same username
+      // 2. High attempt count (15+)
+      // 3. Short time window
+      if (uniqueIps >= 3 && totalAttempts >= 15) {
+        const timeSpan = (data.timestamps[0] - data.timestamps[data.timestamps.length - 1]) / 1000; // seconds
+        const attackRate = totalAttempts / timeSpan; // attempts per second
+        
+        // Create security event
+        await SecurityEventModel.create({
+          eventType: 'distributed_attack',
+          severity: 'critical',
+          ipAddress: Array.from(data.ips).join(', '),
+          usernameTarget: username,
+          attackVector: `Distributed attack detected: ${uniqueIps} IPs attempting ${totalAttempts} logins on single account in ${Math.floor(timeSpan)}s (${attackRate.toFixed(2)} req/s)`,
+          confidenceScore: Math.min(0.7 + (uniqueIps * 0.05), 0.99),
+          evidence: {
+            targetUsername: username,
+            uniqueIps,
+            totalAttempts,
+            timeWindowSeconds: Math.floor(timeSpan),
+            attackRate: attackRate.toFixed(2),
+            sourceIps: Array.from(data.ips).slice(0, 10)
+          },
+          mitigationApplied: 'account_lockout_recommended'
+        });
+        
+        // Store threat data in Redis for all involved IPs
+        if (redisClient) {
+          for (const ip of data.ips) {
+            const threatKey = `threat:ip:${ip}`;
+            await redisClient.setEx(threatKey, 3600, '0.9'); // High threat for 1 hour
+          }
+          
+          // Mark username as under attack
+          const usernameKey = `threat:username:${username}`;
+          await redisClient.setEx(usernameKey, 1800, JSON.stringify({
+            attackingIps: Array.from(data.ips),
+            attempts: totalAttempts,
+            detected: new Date().toISOString()
+          }));
+        }
+        
+        logger.error(
+          `DISTRIBUTED ATTACK DETECTED: ${uniqueIps} IPs targeting "${username}" ` +
+          `(${totalAttempts} attempts in ${Math.floor(timeSpan)}s)`
+        );
+      }
+    }
+  } catch (error) {
+    logger.error(`Error in distributed attack detection: ${error.message}`);
+  }
+}
+
+/**
+ * Detect credential stuffing patterns across multiple usernames
+ * Attackers use leaked credentials from other breaches
+ */
+async function detectCredentialStuffing() {
+  try {
+    const query = `
+      SELECT ip_address, COUNT(DISTINCT username_attempted) as unique_users, COUNT(*) as attempts
+      FROM auth_logs
+      WHERE success = false
+        AND event_type = 'login_failure'
+        AND created_at > NOW() - INTERVAL '5 minutes'
+      GROUP BY ip_address
+      HAVING COUNT(DISTINCT username_attempted) >= 5
+      ORDER BY attempts DESC
+    `;
+    
+    const result = await pool.query(query);
+    
+    for (const row of result.rows) {
+      const { ip_address, unique_users, attempts } = row;
+      
+      // Credential stuffing: many different usernames from single IP
+      if (unique_users >= 5) {
+        await SecurityEventModel.create({
+          eventType: 'credential_stuffing',
+          severity: 'high',
+          ipAddress: ip_address,
+          attackVector: `Credential stuffing detected: ${attempts} attempts across ${unique_users} different usernames`,
+          confidenceScore: Math.min(0.6 + (unique_users * 0.05), 0.95),
+          evidence: {
+            uniqueUsernames: unique_users,
+            totalAttempts: attempts,
+            pattern: 'multiple_username_enumeration'
+          },
+          mitigationApplied: 'rate_limiting_strict'
+        });
+        
+        // Increase threat level
+        if (redisClient) {
+          const threatKey = `threat:ip:${ip_address}`;
+          await redisClient.setEx(threatKey, 1800, '0.85');
+        }
+        
+        logger.warn(
+          `CREDENTIAL STUFFING from ${ip_address}: ${attempts} attempts on ${unique_users} users`
+        );
+      }
+    }
+  } catch (error) {
+    logger.error(`Error in credential stuffing detection: ${error.message}`);
   }
 }
 

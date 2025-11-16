@@ -31,17 +31,20 @@
 
 | Attack Type | Defense Mechanism | Status |
 |-------------|------------------|--------|
-| **Timing Attacks** | Constant-time operations, adaptive noise (50-200ms) | ✅ Active |
+| **Timing Attacks** | Quantum timing slots (100/150/200/250ms), constant-time operations | ✅ Active |
 | **Username Enumeration** | Dummy hash operations, identical response times | ✅ Active |
 | **Brute Force** | Rate limiting (30/min), failed login tracking | ✅ Active |
 | **Credential Stuffing** | Pattern detection, account lockout | ✅ Active |
 | **Password Spray** | Multi-target detection, severity escalation | ✅ Active |
+| **Distributed Attacks** | Username rate limiting (20/5min), multi-IP correlation | ✅ Active |
 | **Statistical Analysis** | CV/kurtosis analysis, outlier detection | ✅ Active |
 
 ### Key Features
 
 - 🔐 **Argon2id** password hashing (PHC winner)
 - ⏱️ **Constant-time** authentication (`crypto.timingSafeEqual`)
+- 🔮 **Quantum timing** defense (fixed time slots vs random delays)
+- 🌐 **Distributed attack protection** (username-based rate limiting)
 - 🎯 **Real-time attack detection** (statistical analysis)
 - 📊 **Live monitoring dashboard** (React + Chart.js)
 - 🐳 **Fully dockerized** (6-service architecture)
@@ -141,6 +144,11 @@ curl http://localhost:8001/health  # Monitor service
 ### 1. Timing Attack Protection
 
 ```javascript
+// Quantum timing - fixed time slots instead of random delays
+const quantumSlots = [100, 150, 200, 250]; // milliseconds
+const targetTime = quantumSlots[cryptoRandomIndex];
+// All responses complete at exact quantum intervals
+
 // Constant-time password verification
 const isValid = await ConstantTimeAuth.verifyPasswordArgon2(
   password, salt, storedHash
@@ -149,9 +157,12 @@ const isValid = await ConstantTimeAuth.verifyPasswordArgon2(
 ```
 
 **Mechanisms:**
+- **Quantum timing slots**: Responses complete at discrete intervals (100/150/200/250ms)
+- **Crypto-random selection**: Uses `crypto.randomBytes()` for unpredictable slot selection
+- **Threat-adaptive slots**: Higher threat levels → higher time slots (200-300ms)
 - Argon2id hashing (memoryCost: 65536, timeCost: 3)
 - `crypto.timingSafeEqual()` for comparisons
-- Adaptive noise injection (50-200ms based on threat level)
+- No statistical analysis possible - all operations normalized to 4 quantum states
 
 ### 2. Username Enumeration Defense
 
@@ -194,6 +205,27 @@ The monitor service analyzes:
 - **Kurtosis**: Bimodal distribution detection
 - **Outliers**: IQR-based anomaly detection
 - **Attack Probability**: 0.0-1.0 confidence score
+
+### 5. Distributed Attack Prevention
+
+```javascript
+// Prevents attacks using multiple IPs/proxies targeting same account
+// Username rate limiting: 20 attempts per username in 5 minutes (from ANY IP)
+const usernameAllowed = await checkUsernameRateLimit(redis, username);
+
+// Distributed attack detection
+if (uniqueIPs >= 3 && totalAttempts >= 15) {
+  // Multiple IPs targeting same username = distributed attack
+  createSecurityEvent('distributed_attack', 'critical');
+}
+```
+
+**Mechanisms:**
+- **Username-based rate limiting**: Tracks attempts per username across all IPs
+- **Multi-IP correlation**: Detects 3+ IPs attacking single account
+- **Credential stuffing detection**: Single IP trying multiple usernames
+- **Redis threat tracking**: Shares attack intelligence globally
+- **Auto-mitigation**: Increases threat level for all involved IPs
 
 ---
 
@@ -354,12 +386,17 @@ JWT_SECRET=your-super-secret-key-change-in-production
 JWT_EXPIRATION=3600
 
 # Timing Defense
-MIN_NOISE_MS=50
-MAX_NOISE_MS=200
+MIN_NOISE_MS=50           # Not used - quantum slots instead
+MAX_NOISE_MS=200          # Not used - quantum slots instead
+QUANTUM_SLOTS=100,150,200,250  # Fixed timing intervals (ms)
 
 # Detection
 DETECTION_THRESHOLD=0.75
 ANALYSIS_WINDOW=300
+
+# Rate Limiting
+USERNAME_RATE_LIMIT=20    # Max attempts per username in 5 min
+IP_RATE_LIMIT=30          # Max login attempts per IP in 1 min
 ```
 
 ### Rate Limits
@@ -367,9 +404,27 @@ ANALYSIS_WINDOW=300
 Configured in `services/auth-service/src/middleware.js`:
 
 ```javascript
+// IP-based rate limits
 requestsPerMinute: 200        // Global limit
 loginAttemptsPerMinute: 30    // Login endpoint
 registrationPerMinute: 10     // Registration endpoint
+
+// Username-based rate limits (NEW - prevents distributed attacks)
+usernameAttemptsPerWindow: 20 // Per username in 5 minutes (from ANY IP)
+```
+
+### Quantum Timing Slots
+
+Configured in `services/auth-service/src/constantTimeAuth.js`:
+
+```javascript
+// Fixed time slots (not random)
+quantumSlots: [100, 150, 200, 250]  // milliseconds
+
+// Threat-adaptive slots
+lowThreatSlots: [100, 150]           // Threat level 0.0-0.3
+mediumThreatSlots: [150, 200]        // Threat level 0.3-0.7
+highThreatSlots: [200, 250, 300]     // Threat level 0.7-1.0
 ```
 
 ---

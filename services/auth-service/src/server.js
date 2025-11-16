@@ -196,10 +196,23 @@ app.post('/api/auth/register',
 
     try {
       // Check if username exists
+      const userCheckStart = performance.now();
       const existingUser = await UserModel.findByUsername(username);
+      const userCheckTime = performance.now() - userCheckStart;
+      
+      logger.info(`  → Username check: ${userCheckTime.toFixed(2)}ms [${existingUser ? 'EXISTS' : 'AVAILABLE'}]`);
+      
       if (existingUser) {
+        const actualProcessingTime = performance.now() - startTime;
+        logger.info(`  → Actual processing time (before noise): ${actualProcessingTime.toFixed(2)}ms`);
+        
+        const noiseStart = performance.now();
         await timingDefenseService.randomizedDelay();
+        const noiseTime = performance.now() - noiseStart;
+        
         const processingTime = timingDefenseService.measureExecutionTime(startTime);
+        logger.info(`  → Noise injection: ${noiseTime.toFixed(2)}ms`);
+        logger.info(`  → TOTAL TIME: ${processingTime.toFixed(2)}ms (actual: ${actualProcessingTime.toFixed(2)}ms + noise: ${noiseTime.toFixed(2)}ms)`);
 
         await logAuthAttempt({
           username,
@@ -215,10 +228,23 @@ app.post('/api/auth/register',
       }
 
       // Check if email exists
+      const emailCheckStart = performance.now();
       const existingEmail = await UserModel.findByEmail(email);
+      const emailCheckTime = performance.now() - emailCheckStart;
+      
+      logger.info(`  → Email check: ${emailCheckTime.toFixed(2)}ms [${existingEmail ? 'EXISTS' : 'AVAILABLE'}]`);
+      
       if (existingEmail) {
+        const actualProcessingTime = performance.now() - startTime;
+        logger.info(`  → Actual processing time (before noise): ${actualProcessingTime.toFixed(2)}ms`);
+        
+        const noiseStart = performance.now();
         await timingDefenseService.randomizedDelay();
+        const noiseTime = performance.now() - noiseStart;
+        
         const processingTime = timingDefenseService.measureExecutionTime(startTime);
+        logger.info(`  → Noise injection: ${noiseTime.toFixed(2)}ms`);
+        logger.info(`  → TOTAL TIME: ${processingTime.toFixed(2)}ms (actual: ${actualProcessingTime.toFixed(2)}ms + noise: ${noiseTime.toFixed(2)}ms)`);
 
         await logAuthAttempt({
           username,
@@ -234,22 +260,38 @@ app.post('/api/auth/register',
       }
 
       // Hash password using Argon2id
+      logger.info(`  → Hashing password with Argon2id...`);
+      const hashStart = performance.now();
       const { hash: passwordHash, salt } = await ConstantTimeAuth.hashPasswordArgon2(password);
+      const hashTime = performance.now() - hashStart;
+      logger.info(`  → Password hashing: ${hashTime.toFixed(2)}ms`);
 
       // Create new user
+      const createUserStart = performance.now();
       const newUser = await UserModel.create({
         username,
         email,
         passwordHash,
         salt
       });
+      const createUserTime = performance.now() - createUserStart;
+      logger.info(`  → User creation: ${createUserTime.toFixed(2)}ms`);
 
       // Create JWT token
       const token = createJwtToken(newUser.id, newUser.username, newUser.is_admin);
 
+      // Calculate actual processing time
+      const actualProcessingTime = performance.now() - startTime;
+      logger.info(`  → Actual processing time (before noise): ${actualProcessingTime.toFixed(2)}ms`);
+
       // Apply timing defense
+      const noiseStart = performance.now();
       await timingDefenseService.randomizedDelay();
+      const noiseTime = performance.now() - noiseStart;
+      
       const processingTime = timingDefenseService.measureExecutionTime(startTime);
+      logger.info(`  → Noise injection: ${noiseTime.toFixed(2)}ms`);
+      logger.info(`  → TOTAL TIME: ${processingTime.toFixed(2)}ms (actual: ${actualProcessingTime.toFixed(2)}ms + noise: ${noiseTime.toFixed(2)}ms)`);
 
       // Log successful registration
       await logAuthAttempt({
@@ -304,6 +346,34 @@ app.post('/api/auth/login',
     }
 
     const { username, password } = req.body;
+
+    // Check username-based rate limit (prevents distributed attacks)
+    try {
+      const redis = await initRedis();
+      const rateLimiter = new RateLimitMiddleware();
+      const usernameAllowed = await rateLimiter.checkUsernameRateLimit(redis, username);
+      
+      if (!usernameAllowed) {
+        await timingDefenseService.randomizedDelay();
+        const processingTime = timingDefenseService.measureExecutionTime(startTime);
+        
+        await logAuthAttempt({
+          username,
+          eventType: 'login_failure',
+          ipAddress,
+          userAgent,
+          processingTime,
+          success: false,
+          errorMessage: 'Username rate limit exceeded (distributed attack protection)'
+        });
+        
+        return res.status(403).json({ 
+          error: 'This account is temporarily protected. Please try again later.' 
+        });
+      }
+    } catch (error) {
+      logger.warn(`Username rate limit check failed: ${error.message}`);
+    }
 
     // Get threat level from Redis
     const threatLevel = await getThreatLevel(ipAddress);

@@ -27,28 +27,27 @@ async function initRedis() {
 
 /**
  * Timing Defense Middleware
- * Adds random delays to prevent timing analysis
+ * Uses quantum timing slots to prevent timing analysis
  */
 class TimingDefenseMiddleware {
   constructor(minDelayMs = 10, maxDelayMs = 50) {
     this.minDelayMs = minDelayMs;
     this.maxDelayMs = maxDelayMs;
+    // Define quantum time slots for middleware
+    this.quantumSlots = [10, 20, 30, 40, 50];
   }
 
   middleware() {
     return async (req, res, next) => {
-      // Add small random delay to all requests
-      const delayRange = this.maxDelayMs - this.minDelayMs;
-      if (delayRange > 0) {
-        const randomBuffer = crypto.randomBytes(4);
-        const randomValue = randomBuffer.readUInt32BE(0);
-        const randomDelay = (randomValue % delayRange) + this.minDelayMs;
-        
-        await new Promise(resolve => setTimeout(resolve, randomDelay));
-      }
+      // Use quantum timing instead of random delays
+      const randomBuffer = crypto.randomBytes(1);
+      const slotIndex = randomBuffer[0] % this.quantumSlots.length;
+      const delay = this.quantumSlots[slotIndex];
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
 
       // Add security header
-      res.setHeader('X-Timing-Defense', 'active');
+      res.setHeader('X-Timing-Defense', 'quantum');
       
       next();
     };
@@ -129,6 +128,39 @@ class RateLimitMiddleware {
       return requestCount < limit;
     } catch (error) {
       console.error('Rate limit check failed:', error);
+      return true; // Allow on error
+    }
+  }
+  
+  /**
+   * Check rate limit for specific username (prevents distributed attacks)
+   */
+  async checkUsernameRateLimit(redis, username) {
+    const key = `ratelimit:username:${username}`;
+    const currentTime = Math.floor(Date.now() / 1000);
+    const windowStart = currentTime - 300; // 5 minute window
+
+    try {
+      // Remove old attempts
+      await redis.zRemRangeByScore(key, 0, windowStart);
+
+      // Count attempts in window
+      const attemptCount = await redis.zCard(key);
+
+      // Add current attempt
+      await redis.zAdd(key, {
+        score: currentTime,
+        value: `${currentTime}:${Math.random()}`
+      });
+
+      // Set expiration
+      await redis.expire(key, 600);
+
+      // Allow max 20 attempts per username in 5 minutes (from ANY IP)
+      // This prevents distributed attacks rotating IPs
+      return attemptCount < 20;
+    } catch (error) {
+      console.error('Username rate limit check failed:', error);
       return true; // Allow on error
     }
   }
