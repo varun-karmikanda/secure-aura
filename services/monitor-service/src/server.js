@@ -87,6 +87,16 @@ async function analyzeIpTimingPatterns(ipAddress) {
 
   // Extract timing data
   const timings = loginAttempts.map(a => a.processing_time_ms);
+  
+  // Get most common user-agent (for analysis)
+  const userAgentCounts = {};
+  loginAttempts.forEach(a => {
+    const ua = a.user_agent || 'unknown';
+    userAgentCounts[ua] = (userAgentCounts[ua] || 0) + 1;
+  });
+  const mostCommonUserAgent = Object.keys(userAgentCounts).reduce((a, b) => 
+    userAgentCounts[a] > userAgentCounts[b] ? a : b
+  );
 
   // Analyze patterns
   const analysis = TimingAttackDetector.analyzeTimingPatterns(timings);
@@ -99,6 +109,7 @@ async function analyzeIpTimingPatterns(ipAddress) {
   const timingAnalysis = await TimingAnalysisModel.create({
     ipAddress,
     usernameAttempted: loginAttempts[0]?.username_attempted || null,
+    userAgent: mostCommonUserAgent,
     requestCount: loginAttempts.length,
     avgProcessingTime: analysis.meanTime,
     stdDevProcessingTime: analysis.stdDev,
@@ -127,12 +138,15 @@ async function analyzeIpTimingPatterns(ipAddress) {
       eventType: attackTypes.join(', '),
       severity,
       ipAddress,
+      userAgent: mostCommonUserAgent,
       attackVector: 'Statistical timing analysis detected suspicious patterns',
       confidenceScore: analysis.attackProbability,
       evidence: {
         timingAnalysis: analysis,
         enumerationDetection: enumDetection,
-        requestCount: loginAttempts.length
+        requestCount: loginAttempts.length,
+        uniqueUserAgents: Object.keys(userAgentCounts).length,
+        userAgentDistribution: userAgentCounts
       },
       mitigationApplied: 'increased_noise_injection'
     });
@@ -149,7 +163,7 @@ async function analyzeIpTimingPatterns(ipAddress) {
 
     logger.warn(
       `ATTACK DETECTED from ${ipAddress}: ${attackTypes.join(', ')} ` +
-      `(confidence: ${(analysis.attackProbability * 100).toFixed(2)}%)`
+      `(confidence: ${(analysis.attackProbability * 100).toFixed(2)}%, user-agent: ${mostCommonUserAgent})`
     );
   }
 
@@ -198,22 +212,35 @@ async function detectBruteForce(ipAddress) {
   if (recentFailures.length >= 10) {
     const uniqueUsernames = new Set(recentFailures.map(f => f.username_attempted));
     
+    // Get most common user-agent
+    const userAgentCounts = {};
+    recentFailures.forEach(f => {
+      const ua = f.user_agent || 'unknown';
+      userAgentCounts[ua] = (userAgentCounts[ua] || 0) + 1;
+    });
+    const mostCommonUserAgent = Object.keys(userAgentCounts).reduce((a, b) => 
+      userAgentCounts[a] > userAgentCounts[b] ? a : b
+    );
+    
     // Create security event for brute force
     await SecurityEventModel.create({
       eventType: 'brute_force_attack',
       severity: uniqueUsernames.size === 1 ? 'high' : 'critical', // Single user = credential stuffing, multiple = spray
       ipAddress,
+      userAgent: mostCommonUserAgent,
       attackVector: `${recentFailures.length} failed login attempts in 5 minutes targeting ${uniqueUsernames.size} username(s)`,
       confidenceScore: Math.min(recentFailures.length / 15, 0.99),
       evidence: {
         failedAttempts: recentFailures.length,
         uniqueUsernames: uniqueUsernames.size,
-        usernames: Array.from(uniqueUsernames)
+        usernames: Array.from(uniqueUsernames),
+        uniqueUserAgents: Object.keys(userAgentCounts).length,
+        userAgentDistribution: userAgentCounts
       },
       mitigationApplied: 'rate_limiting_applied'
     });
     
-    logger.warn(`BRUTE FORCE DETECTED from ${ipAddress}: ${recentFailures.length} failed attempts`);
+    logger.warn(`BRUTE FORCE DETECTED from ${ipAddress}: ${recentFailures.length} failed attempts (user-agent: ${mostCommonUserAgent})`);
   }
 }
 
@@ -294,6 +321,7 @@ app.get('/api/monitor/events', async (req, res) => {
         event_type: e.event_type,
         severity: e.severity,
         ip_address: e.ip_address,
+        user_agent: e.user_agent,
         confidence_score: e.confidence_score,
         attack_vector: e.attack_vector,
         resolved: e.resolved,
@@ -321,6 +349,7 @@ app.get('/api/monitor/timing-analysis', async (req, res) => {
       analyses: analyses.map(a => ({
         id: a.id,
         ip_address: a.ip_address,
+        user_agent: a.user_agent,
         request_count: a.request_count,
         avg_processing_time: a.avg_processing_time,
         attack_probability: a.attack_probability,

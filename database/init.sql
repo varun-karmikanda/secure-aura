@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS timing_analysis (
     id SERIAL PRIMARY KEY,
     ip_address INET NOT NULL,
     username_attempted VARCHAR(255),
+    user_agent TEXT,
     request_count INTEGER DEFAULT 1,
     avg_processing_time REAL,
     std_dev_processing_time REAL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS security_events (
     event_type VARCHAR(100) NOT NULL, -- timing_attack, brute_force, enumeration, etc.
     severity VARCHAR(20) NOT NULL, -- low, medium, high, critical
     ip_address INET NOT NULL,
+    user_agent TEXT,
     username_target VARCHAR(255),
     attack_vector TEXT,
     confidence_score REAL,

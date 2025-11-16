@@ -73,6 +73,7 @@ class TimingAnalysisModel {
   static async create({
     ipAddress,
     usernameAttempted,
+    userAgent,
     requestCount,
     avgProcessingTime,
     stdDevProcessingTime,
@@ -86,18 +87,19 @@ class TimingAnalysisModel {
   }) {
     const query = `
       INSERT INTO timing_analysis (
-        ip_address, username_attempted, request_count,
+        ip_address, username_attempted, user_agent, request_count,
         avg_processing_time, std_dev_processing_time,
         min_processing_time, max_processing_time,
         timing_variance, attack_probability, is_suspicious,
         window_start, window_end
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
     const values = [
       ipAddress,
       usernameAttempted,
+      userAgent,
       requestCount,
       avgProcessingTime,
       stdDevProcessingTime,
@@ -141,6 +143,7 @@ class SecurityEventModel {
     eventType,
     severity,
     ipAddress,
+    userAgent = null,
     usernameTarget = null,
     attackVector = null,
     confidenceScore = null,
@@ -149,16 +152,17 @@ class SecurityEventModel {
   }) {
     const query = `
       INSERT INTO security_events (
-        event_type, severity, ip_address, username_target,
+        event_type, severity, ip_address, user_agent, username_target,
         attack_vector, confidence_score, evidence, mitigation_applied
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
     const values = [
       eventType,
       severity,
       ipAddress,
+      userAgent,
       usernameTarget,
       attackVector,
       confidenceScore,

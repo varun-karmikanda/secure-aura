@@ -233,7 +233,7 @@ function App() {
                         <span className="text-white font-medium">{event.event_type}</span>
                       </div>
                       <p className="text-gray-400 text-sm mt-1">
-                        IP: {event.ip_address} | Confidence: {(event.confidence_score * 100).toFixed(1)}%
+                        IP: {event.ip_address} | User-Agent: <span className="text-blue-400">{event.user_agent ? (event.user_agent.length > 40 ? event.user_agent.substring(0, 37) + '...' : event.user_agent) : 'N/A'}</span> | Confidence: {(event.confidence_score * 100).toFixed(1)}%
                       </p>
                     </div>
                     <div className="text-gray-400 text-sm">
@@ -267,6 +267,9 @@ function App() {
                         IP Address
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        User-Agent
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Confidence
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -294,6 +297,17 @@ function App() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {event.ip_address}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                          <span className="text-blue-400 font-mono text-xs" title={event.user_agent}>
+                            {event.user_agent ? (
+                              event.user_agent.length > 30 
+                                ? event.user_agent.substring(0, 27) + '...'
+                                : event.user_agent
+                            ) : (
+                              'N/A'
+                            )}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {(event.confidence_score * 100).toFixed(1)}%
@@ -329,6 +343,9 @@ function App() {
                         IP Address
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        User-Agent
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Requests
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -350,6 +367,17 @@ function App() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                           {analysis.ip_address}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                          <span className="text-blue-400 font-mono text-xs" title={analysis.user_agent}>
+                            {analysis.user_agent ? (
+                              analysis.user_agent.length > 30
+                                ? analysis.user_agent.substring(0, 27) + '...'
+                                : analysis.user_agent
+                            ) : (
+                              'N/A'
+                            )}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {analysis.request_count}
