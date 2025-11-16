@@ -1,0 +1,29 @@
+{
+  "name": "secure-aura",
+  "version": "1.0.0",
+  "description": "Comprehensive Timing Attack Defense Framework",
+  "main": "index.js",
+  "scripts": {
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "restart": "docker-compose restart",
+    "logs": "docker-compose logs -f",
+    "build": "docker-compose build",
+    "test": "cd tests && ./quick-test.sh",
+    "demo": "cd tests && ./demo-attack-detection.sh",
+    "verify": "cd tests && ./verify-protection.sh"
+  },
+  "keywords": [
+    "security",
+    "timing-attack",
+    "authentication",
+    "defense",
+    "cybersecurity"
+  ],
+  "author": "Secure Aura Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/secure-aura.git"
+  }
+}
