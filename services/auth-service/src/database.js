@@ -124,6 +124,19 @@ class UserModel {
     `;
     await pool.query(query, [userId]);
   }
+
+  /**
+   * Find all users
+   */
+  static async findAll() {
+    const query = `
+      SELECT id, username, email, is_active, is_admin, created_at, last_login, failed_login_attempts, account_locked_until
+      FROM users
+      ORDER BY created_at DESC
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  }
 }
 
 class AuthLogModel {

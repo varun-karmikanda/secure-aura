@@ -124,6 +124,11 @@ export function ApiTester() {
   }>({});
 
   const handleSend = async () => {
+    if (!url.trim()) {
+      toast.error("Please enter a URL");
+      return;
+    }
+
     setIsLoading(true);
     const startTime = Date.now();
 
@@ -167,6 +172,7 @@ export function ApiTester() {
         if (res.ok && data) {
           if (data.access_token) {
             setActiveTokens({ accessToken: data.access_token });
+            localStorage.setItem("auth_token", data.access_token);
             toast.success("Access token captured automatically!");
           }
         }
@@ -249,6 +255,7 @@ export function ApiTester() {
 
   const clearTokens = () => {
     setActiveTokens({});
+    localStorage.removeItem("auth_token");
     toast.success("Tokens cleared");
   };
 

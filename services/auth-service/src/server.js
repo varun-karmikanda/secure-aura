@@ -580,6 +580,35 @@ app.post('/api/auth/verify-token',
     }
   }
 );
+/**
+ * Get All Users Endpoint
+ * Requires valid JWT token in Authorization header
+ */
+app.get(['/api/users', '/api/users/'], async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Missing or invalid authorization header'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
+    
+    // Optional: Check if user is admin
+    // if (!payload.is_admin) {
+    //   return res.status(403).json({ error: 'Access denied' });
+    // }
+
+    const users = await UserModel.findAll();
+    res.json(users);
+
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+});
 
 /**
  * Get Current User Endpoint

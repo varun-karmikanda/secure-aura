@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Filter, 
-  UserPlus, 
+import {
+  Search,
+  Filter,
+  UserPlus,
   MoreVertical,
   Shield,
   Mail,
@@ -22,27 +22,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 interface User {
   id: string;
   email: string;
+  username: string;
   status: "active" | "locked" | "pending";
-  createdAt: string;
-  lastLogin: string;
-  loginCount: number;
+  created_at: string;
+  last_login: string | null;
+  createdAt: string; // Display formatted
+  lastLogin: string; // Display formatted
+  loginCount: number; // Note: Backend doesn't send this yet, defaulting to 0
   role: "admin" | "user" | "moderator";
+  is_active: boolean;
+  is_admin: boolean;
+  failed_login_attempts: number;
+  account_locked_until: string | null;
 }
 
-const mockUsers: User[] = [
-  { id: "1", email: "admin@secure-aura.dev", status: "active", createdAt: "2024-01-15", lastLogin: "2 min ago", loginCount: 847, role: "admin" },
-  { id: "2", email: "john.doe@example.com", status: "active", createdAt: "2024-02-20", lastLogin: "1 hour ago", loginCount: 234, role: "user" },
-  { id: "3", email: "jane.smith@example.com", status: "active", createdAt: "2024-03-05", lastLogin: "3 hours ago", loginCount: 156, role: "user" },
-  { id: "4", email: "bob.wilson@example.com", status: "locked", createdAt: "2024-03-10", lastLogin: "5 days ago", loginCount: 89, role: "user" },
-  { id: "5", email: "alice.johnson@example.com", status: "pending", createdAt: "2024-03-25", lastLogin: "Never", loginCount: 0, role: "user" },
-  { id: "6", email: "mod@secure-aura.dev", status: "active", createdAt: "2024-01-20", lastLogin: "30 min ago", loginCount: 512, role: "moderator" },
-  { id: "7", email: "test.user@example.com", status: "active", createdAt: "2024-03-28", lastLogin: "Yesterday", loginCount: 12, role: "user" },
-  { id: "8", email: "security@company.com", status: "active", createdAt: "2024-02-14", lastLogin: "4 hours ago", loginCount: 367, role: "user" },
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 const statusStyles = {
   active: "bg-success/20 text-success border-success/30",
@@ -57,21 +56,71 @@ const roleStyles = {
 };
 
 export function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const filteredUsers = mockUsers.filter(user => {
-    const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        // If no token, we can't fetch. Just show empty or maybe a message?
+        // For now, let's just stop loading.
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/users/`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Transform data to match interface if needed
+        const transformedUsers = data.map((u: any) => ({
+          ...u,
+          status: u.account_locked_until && new Date(u.account_locked_until) > new Date() ? "locked" : (u.is_active ? "active" : "pending"),
+          role: u.is_admin ? "admin" : "user",
+          loginCount: 0, // Not provided by backend yet
+          lastLogin: u.last_login ? new Date(u.last_login).toLocaleString() : "Never",
+          createdAt: new Date(u.created_at).toLocaleDateString()
+        }));
+        setUsers(transformedUsers);
+      } else {
+        console.error("Failed to fetch users");
+        if (res.status === 401) {
+          toast.error("Unauthorized. Please login via API Tester.");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.username.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || user.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
-    total: mockUsers.length,
-    active: mockUsers.filter(u => u.status === "active").length,
-    locked: mockUsers.filter(u => u.status === "locked").length,
-    pending: mockUsers.filter(u => u.status === "pending").length,
+    total: users.length,
+    active: users.filter(u => u.status === "active").length,
+    locked: users.filter(u => u.status === "locked").length,
+    pending: users.filter(u => u.status === "pending").length,
   };
 
   return (
@@ -82,9 +131,9 @@ export function UserManagement() {
           <h1 className="text-3xl font-bold gradient-text">User Management</h1>
           <p className="text-muted-foreground mt-1">Manage user accounts and permissions</p>
         </div>
-        <Button className="glow">
+        <Button className="glow" onClick={fetchUsers}>
           <UserPlus className="w-4 h-4 mr-2" />
-          Add User
+          Refresh
         </Button>
       </div>
 
@@ -96,7 +145,7 @@ export function UserManagement() {
           { label: "Locked", value: stats.locked, color: "text-destructive" },
           { label: "Pending", value: stats.pending, color: "text-warning" },
         ].map((stat, index) => (
-          <div 
+          <div
             key={stat.label}
             className="glass rounded-xl p-4 animate-fade-in-up gradient-border"
             style={{ animationDelay: `${index * 100}ms` }}
@@ -114,7 +163,7 @@ export function UserManagement() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search users by email..."
+            placeholder="Search users by email or username..."
             className="pl-10 bg-muted/50 border-border/50"
           />
         </div>
@@ -145,67 +194,79 @@ export function UserManagement() {
                 <th className="text-left py-4 px-4 text-sm font-medium text-muted-foreground">Status</th>
                 <th className="text-left py-4 px-4 text-sm font-medium text-muted-foreground">Role</th>
                 <th className="text-left py-4 px-4 text-sm font-medium text-muted-foreground">Last Login</th>
-                <th className="text-left py-4 px-4 text-sm font-medium text-muted-foreground">Logins</th>
                 <th className="text-right py-4 px-4 text-sm font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user, index) => (
-                <tr 
-                  key={user.id}
-                  className="border-b border-border/30 hover:bg-muted/30 transition-colors animate-fade-in"
-                  style={{ animationDelay: `${600 + index * 50}ms` }}
-                >
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-info flex items-center justify-center text-primary-foreground font-semibold">
-                        {user.email[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{user.email}</p>
-                        <p className="text-xs text-muted-foreground">Joined {user.createdAt}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      "px-2 py-1 rounded-md text-xs font-medium border",
-                      statusStyles[user.status]
-                    )}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      "px-2 py-1 rounded-md text-xs font-medium border",
-                      roleStyles[user.role]
-                    )}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground">{user.lastLogin}</td>
-                  <td className="py-3 px-4 text-sm font-mono text-foreground">{user.loginCount}</td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => setSelectedUser(user)}
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Loading users...
                   </td>
                 </tr>
-              ))}
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    No users found. {localStorage.getItem("auth_token") ? "" : "Please login via API Tester first."}
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user, index) => (
+                  <tr
+                    key={user.id}
+                    className="border-b border-border/30 hover:bg-muted/30 transition-colors animate-fade-in"
+                    style={{ animationDelay: `${600 + index * 50}ms` }}
+                  >
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-info flex items-center justify-center text-primary-foreground font-semibold">
+                          {user.email[0]?.toUpperCase() || "U"}
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{user.username}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={cn(
+                        "px-2 py-1 rounded-md text-xs font-medium border",
+                        statusStyles[user.status]
+                      )}>
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={cn(
+                        "px-2 py-1 rounded-md text-xs font-medium border",
+                        roleStyles[user.role]
+                      )}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{user.lastLogin}</td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setSelectedUser(user)}
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -217,15 +278,15 @@ export function UserManagement() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-info flex items-center justify-center text-primary-foreground font-bold text-lg">
-                {selectedUser?.email[0].toUpperCase()}
+                {selectedUser?.email[0]?.toUpperCase() || "U"}
               </div>
               <div>
-                <p className="font-semibold text-foreground">{selectedUser?.email}</p>
-                <p className="text-sm text-muted-foreground font-normal">User Details</p>
+                <p className="font-semibold text-foreground">{selectedUser?.username}</p>
+                <p className="text-sm text-muted-foreground font-normal">{selectedUser?.email}</p>
               </div>
             </DialogTitle>
           </DialogHeader>
-          
+
           {selectedUser && (
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
@@ -263,9 +324,9 @@ export function UserManagement() {
                 <div className="glass rounded-lg p-3">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <Mail className="w-4 h-4" />
-                    <span className="text-xs">Total Logins</span>
+                    <span className="text-xs">Joined</span>
                   </div>
-                  <p className="text-sm font-medium text-foreground font-mono">{selectedUser.loginCount}</p>
+                  <p className="text-sm font-medium text-foreground font-mono">{selectedUser.createdAt}</p>
                 </div>
               </div>
 
