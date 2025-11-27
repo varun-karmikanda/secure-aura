@@ -1,0 +1,126 @@
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { 
+  LayoutDashboard, 
+  Send, 
+  Users, 
+  FileText, 
+  Shield, 
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Zap
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface AdminLayoutProps {
+  children: React.ReactNode;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}
+
+const navItems = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "api-tester", label: "API Tester", icon: Send },
+  { id: "users", label: "Users", icon: Users },
+  { id: "logs", label: "System Logs", icon: FileText },
+  { id: "security", label: "Security", icon: Shield },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
+export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-background flex">
+      {/* Sidebar */}
+      <aside 
+        className={cn(
+          "fixed left-0 top-0 h-full glass-strong z-50 flex flex-col transition-all duration-300",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        {/* Logo */}
+        <div className="p-4 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-info flex items-center justify-center glow animate-pulse-glow">
+              <Zap className="w-5 h-5 text-primary-foreground" />
+            </div>
+            {!collapsed && (
+              <div className="animate-fade-in">
+                <h1 className="font-semibold text-foreground">Secure Aura</h1>
+                <p className="text-xs text-muted-foreground">Admin Panel</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-3 space-y-1">
+          {navItems.map((item, index) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                  "hover:bg-accent/50 group",
+                  isActive && "bg-primary/10 border border-primary/30 glow",
+                  !collapsed && "animate-fade-in"
+                )}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <Icon 
+                  className={cn(
+                    "w-5 h-5 transition-colors",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )} 
+                />
+                {!collapsed && (
+                  <span 
+                    className={cn(
+                      "text-sm font-medium transition-colors",
+                      isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Collapse Toggle */}
+        <div className="p-3 border-t border-border/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className="w-full justify-center"
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronLeft className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main 
+        className={cn(
+          "flex-1 transition-all duration-300",
+          collapsed ? "ml-16" : "ml-64"
+        )}
+      >
+        <div className="p-6 min-h-screen">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
