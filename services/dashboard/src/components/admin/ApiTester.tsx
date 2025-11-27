@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Send, 
-  Plus, 
-  Clock, 
-  Folder, 
+import {
+  Send,
+  Plus,
+  Clock,
+  Folder,
   ChevronDown,
   Copy,
   Check,
@@ -45,52 +45,55 @@ const methodColors: Record<HttpMethod, string> = {
   PATCH: "bg-primary/20 text-primary border-primary/30",
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+
 const secureAuraEndpoints: SavedRequest[] = [
   {
     id: "1",
     name: "Register User",
     method: "POST",
-    url: "http://localhost:8080/api/register",
+    url: `${API_BASE_URL}/api/auth/register`,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "user@example.com", password: "SecurePass123!" }, null, 2),
+    body: JSON.stringify({
+      username: "newuser" + Date.now(),
+      email: "user" + Date.now() + "@example.com",
+      password: "SecurePass123!"
+    }, null, 2),
   },
   {
     id: "2",
     name: "Login",
     method: "POST",
-    url: "http://localhost:8080/api/login",
+    url: `${API_BASE_URL}/api/auth/login`,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "user@example.com", password: "SecurePass123!" }, null, 2),
+    body: JSON.stringify({
+      username: "testuser",
+      password: "SecurePass123!"
+    }, null, 2),
   },
   {
     id: "3",
-    name: "Refresh Token",
+    name: "Verify Token",
     method: "POST",
-    url: "http://localhost:8080/api/refresh",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer {{refresh_token}}" },
-    body: "",
+    url: `${API_BASE_URL}/api/auth/verify-token`,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "{{access_token}}"
+    }, null, 2),
   },
   {
     id: "4",
     name: "User Profile",
     method: "GET",
-    url: "http://localhost:8080/api/profile",
+    url: `${API_BASE_URL}/api/users/me`,
     headers: { "Authorization": "Bearer {{access_token}}" },
     body: "",
   },
   {
     id: "5",
-    name: "Logout",
-    method: "POST",
-    url: "http://localhost:8080/api/logout",
-    headers: { "Authorization": "Bearer {{access_token}}" },
-    body: "",
-  },
-  {
-    id: "6",
-    name: "Health Check",
+    name: "Auth Health Check",
     method: "GET",
-    url: "http://localhost:8080/health",
+    url: `${API_BASE_URL}/health`,
     headers: {},
     body: "",
   },
@@ -98,7 +101,7 @@ const secureAuraEndpoints: SavedRequest[] = [
 
 export function ApiTester() {
   const [method, setMethod] = useState<HttpMethod>("GET");
-  const [url, setUrl] = useState("http://localhost:8080/health");
+  const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState<Array<{ key: string; value: string }>>([
     { key: "Content-Type", value: "application/json" }
   ]);
@@ -116,6 +119,10 @@ export function ApiTester() {
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<RequestHistory[]>([]);
 
+  const [activeTokens, setActiveTokens] = useState<{
+    accessToken?: string;
+  }>({});
+
   const handleSend = async () => {
     setIsLoading(true);
     const startTime = Date.now();
@@ -123,7 +130,14 @@ export function ApiTester() {
     try {
       const headerObj: Record<string, string> = {};
       headers.forEach(h => {
-        if (h.key && h.value) headerObj[h.key] = h.value;
+        if (h.key && h.value) {
+          // Substitute token placeholders in headers
+          let value = h.value;
+          if (value.includes("{{access_token}}") && activeTokens.accessToken) {
+            value = value.replace("{{access_token}}", activeTokens.accessToken);
+          }
+          headerObj[h.key] = value;
+        }
       });
 
       const options: RequestInit = {
@@ -132,7 +146,12 @@ export function ApiTester() {
       };
 
       if (body && ["POST", "PUT", "PATCH"].includes(method)) {
-        options.body = body;
+        // Substitute token placeholders in body
+        let processedBody = body;
+        if (processedBody.includes("{{access_token}}") && activeTokens.accessToken) {
+          processedBody = processedBody.replace("{{access_token}}", activeTokens.accessToken);
+        }
+        options.body = processedBody;
       }
 
       const res = await fetch(url, options);
@@ -143,6 +162,14 @@ export function ApiTester() {
       const contentType = res.headers.get("content-type");
       if (contentType?.includes("application/json")) {
         data = await res.json();
+
+        // Auto-capture tokens from successful responses
+        if (res.ok && data) {
+          if (data.access_token) {
+            setActiveTokens({ accessToken: data.access_token });
+            toast.success("Access token captured automatically!");
+          }
+        }
       } else {
         data = await res.text();
       }
@@ -190,7 +217,19 @@ export function ApiTester() {
     setMethod(request.method);
     setUrl(request.url);
     setHeaders(Object.entries(request.headers).map(([key, value]) => ({ key, value })));
-    setBody(request.body);
+
+    // Make Register User dynamic so it always creates a new user
+    if (request.id === "1") {
+      const timestamp = Date.now();
+      setBody(JSON.stringify({
+        username: `user_${timestamp}`,
+        email: `user_${timestamp}@example.com`,
+        password: "SecurePass123!"
+      }, null, 2));
+    } else {
+      setBody(request.body);
+    }
+
     toast.success(`Loaded: ${request.name}`);
   };
 
@@ -201,6 +240,16 @@ export function ApiTester() {
       setTimeout(() => setCopied(false), 2000);
       toast.success("Copied to clipboard");
     }
+  };
+
+  const copyToken = (token: string) => {
+    navigator.clipboard.writeText(token);
+    toast.success("Token copied to clipboard");
+  };
+
+  const clearTokens = () => {
+    setActiveTokens({});
+    toast.success("Tokens cleared");
   };
 
   const addHeader = () => {
@@ -246,6 +295,37 @@ export function ApiTester() {
             ))}
           </div>
 
+          {/* Active Tokens Section */}
+          <div className="border-t border-border/50 my-4" />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Save className="w-4 h-4 text-success" />
+              Token Management
+            </h3>
+            <Button variant="ghost" size="sm" onClick={clearTokens} className="h-6 text-xs text-muted-foreground hover:text-destructive">
+              Clear
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Access Token</label>
+              <div className="flex gap-2">
+                <Input
+                  value={activeTokens.accessToken || ""}
+                  onChange={(e) => setActiveTokens(prev => ({ ...prev, accessToken: e.target.value }))}
+                  placeholder="Paste access token..."
+                  className="h-8 text-xs font-mono bg-muted/30"
+                />
+                {activeTokens.accessToken && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToken(activeTokens.accessToken!)}>
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* History */}
           {history.length > 0 && (
             <>
@@ -269,7 +349,7 @@ export function ApiTester() {
                     <span className={cn(
                       "font-mono",
                       item.status >= 200 && item.status < 300 ? "text-success" :
-                      item.status >= 400 ? "text-destructive" : "text-warning"
+                        item.status >= 400 ? "text-destructive" : "text-warning"
                     )}>
                       {item.status}
                     </span>
@@ -330,8 +410,8 @@ export function ApiTester() {
                 onClick={() => setActiveTab("body")}
                 className={cn(
                   "px-4 py-2.5 text-sm font-medium transition-colors",
-                  activeTab === "body" 
-                    ? "text-primary border-b-2 border-primary bg-primary/5" 
+                  activeTab === "body"
+                    ? "text-primary border-b-2 border-primary bg-primary/5"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -341,8 +421,8 @@ export function ApiTester() {
                 onClick={() => setActiveTab("headers")}
                 className={cn(
                   "px-4 py-2.5 text-sm font-medium transition-colors",
-                  activeTab === "headers" 
-                    ? "text-primary border-b-2 border-primary bg-primary/5" 
+                  activeTab === "headers"
+                    ? "text-primary border-b-2 border-primary bg-primary/5"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -406,9 +486,9 @@ export function ApiTester() {
                 <div className="flex items-center gap-4">
                   <span className={cn(
                     "px-3 py-1 rounded-lg font-mono font-semibold text-sm",
-                    response.status >= 200 && response.status < 300 
-                      ? "bg-success/20 text-success" 
-                      : response.status >= 400 
+                    response.status >= 200 && response.status < 300
+                      ? "bg-success/20 text-success"
+                      : response.status >= 400
                         ? "bg-destructive/20 text-destructive"
                         : "bg-warning/20 text-warning"
                   )}>
@@ -422,15 +502,15 @@ export function ApiTester() {
                   {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                 </Button>
               </div>
-              
+
               {/* Response Tabs */}
               <div className="flex border-b border-border/50">
                 <button
                   onClick={() => setResponseTab("body")}
                   className={cn(
                     "px-4 py-2 text-sm font-medium transition-colors",
-                    responseTab === "body" 
-                      ? "text-primary border-b-2 border-primary bg-primary/5" 
+                    responseTab === "body"
+                      ? "text-primary border-b-2 border-primary bg-primary/5"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -440,8 +520,8 @@ export function ApiTester() {
                   onClick={() => setResponseTab("headers")}
                   className={cn(
                     "px-4 py-2 text-sm font-medium transition-colors",
-                    responseTab === "headers" 
-                      ? "text-primary border-b-2 border-primary bg-primary/5" 
+                    responseTab === "headers"
+                      ? "text-primary border-b-2 border-primary bg-primary/5"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -462,8 +542,8 @@ export function ApiTester() {
                     }}
                     className="syntax-highlighter"
                   >
-                    {typeof response.data === "string" 
-                      ? response.data 
+                    {typeof response.data === "string"
+                      ? response.data
                       : JSON.stringify(response.data, null, 2)}
                   </SyntaxHighlighter>
                 ) : (

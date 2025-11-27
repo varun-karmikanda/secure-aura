@@ -1,16 +1,10 @@
+import { useState, useEffect } from "react";
 import { StatsCard } from "./StatsCard";
 import { Users, Shield, Activity, AlertTriangle, Server, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import axios from "axios";
 
-const activityData = [
-  { time: "00:00", requests: 120, threats: 2 },
-  { time: "04:00", requests: 80, threats: 1 },
-  { time: "08:00", requests: 350, threats: 5 },
-  { time: "12:00", requests: 520, threats: 8 },
-  { time: "16:00", requests: 480, threats: 3 },
-  { time: "20:00", requests: 290, threats: 2 },
-  { time: "Now", requests: 180, threats: 1 },
-];
+const API_BASE_URL = import.meta.env.VITE_MONITOR_API_URL || "http://localhost:8001";
 
 const serviceHealth = [
   { name: "Auth Service", status: "healthy", uptime: "99.9%", latency: "12ms" },
@@ -19,15 +13,120 @@ const serviceHealth = [
   { name: "Database", status: "healthy", uptime: "99.95%", latency: "3ms" },
 ];
 
-const recentEvents = [
-  { id: 1, type: "login", message: "User admin@secure-aura.dev logged in", time: "2 min ago", severity: "info" },
-  { id: 2, type: "threat", message: "Rate limit exceeded from 192.168.1.100", time: "5 min ago", severity: "warning" },
-  { id: 3, type: "security", message: "Failed login attempt blocked", time: "12 min ago", severity: "error" },
-  { id: 4, type: "system", message: "Database backup completed", time: "1 hour ago", severity: "success" },
-  { id: 5, type: "login", message: "New user registration: user@example.com", time: "2 hours ago", severity: "info" },
-];
-
 export function Overview() {
+  const [stats, setStats] = useState<any>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const [activityData, setActivityData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+    // Refresh data every 5 seconds
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [statsRes, eventsRes, timingRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/monitor/stats`),
+        axios.get(`${API_BASE_URL}/api/monitor/events?limit=10`),
+        axios.get(`${API_BASE_URL}/api/monitor/timing-analysis?limit=100`),
+      ]);
+
+      setStats(statsRes.data);
+      setEvents(eventsRes.data.events || []);
+
+      // Process timing data for charts
+      const timingData = timingRes.data.analyses || [];
+      const chartData = processTimingData(timingData, eventsRes.data.events || []);
+      setActivityData(chartData);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setLoading(false);
+    }
+  };
+
+  const processTimingData = (timingAnalyses: any[], securityEvents: any[]) => {
+    // Group data by hour for the last 24 hours
+    const now = new Date();
+    const hourlyData: { [key: string]: { requests: number; threats: number } } = {};
+
+    // Initialize last 24 hours
+    for (let i = 23; i >= 0; i--) {
+      const hour = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const timeKey = hour.getHours().toString().padStart(2, '0') + ':00';
+      hourlyData[timeKey] = { requests: 0, threats: 0 };
+    }
+
+    // Count requests from timing analysis
+    timingAnalyses.forEach(analysis => {
+      const date = new Date(analysis.created_at);
+      const timeKey = date.getHours().toString().padStart(2, '0') + ':00';
+      if (hourlyData[timeKey]) {
+        hourlyData[timeKey].requests += analysis.request_count || 0;
+      }
+    });
+
+    // Count threats from security events
+    securityEvents.forEach(event => {
+      const date = new Date(event.created_at);
+      const timeKey = date.getHours().toString().padStart(2, '0') + ':00';
+      if (hourlyData[timeKey]) {
+        hourlyData[timeKey].threats += 1;
+      }
+    });
+
+    // Convert to array for chart, showing only last 7 hours + current
+    const hours = Object.keys(hourlyData).sort();
+    const recentHours = hours.slice(-8);
+
+    return recentHours.map((time, index) => ({
+      time: index === recentHours.length - 1 ? 'Now' : time,
+      requests: hourlyData[time].requests,
+      threats: hourlyData[time].threats,
+    }));
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "critical":
+        return "bg-red-500/10 text-red-400 border-red-500/50";
+      case "high":
+        return "bg-orange-500/10 text-orange-400 border-orange-500/50";
+      case "medium":
+        return "bg-yellow-500/10 text-yellow-400 border-yellow-500/50";
+      case "low":
+        return "bg-blue-500/10 text-blue-400 border-blue-500/50";
+      default:
+        return "bg-gray-500/10 text-gray-400 border-gray-500/50";
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -39,38 +138,38 @@ export function Overview() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="Total Users"
-          value="2,847"
-          change="+12.5% from last week"
-          changeType="increase"
+          title="Total Auth Attempts"
+          value={stats?.total_auth_attempts?.toString() || "0"}
+          change={`${stats?.successful_logins || 0} successful`}
+          changeType="neutral"
           icon={Users}
           delay={100}
         />
         <StatsCard
-          title="Active Sessions"
-          value="384"
-          change="Currently online"
-          changeType="neutral"
+          title="Successful Logins"
+          value={stats?.successful_logins?.toString() || "0"}
+          change={`${stats?.failed_logins || 0} failed`}
+          changeType={stats?.successful_logins > stats?.failed_logins ? "increase" : "decrease"}
           icon={Activity}
           iconColor="text-success"
           delay={200}
         />
         <StatsCard
-          title="Threats Blocked"
-          value="156"
-          change="-8.3% from last week"
-          changeType="decrease"
+          title="Security Events"
+          value={stats?.security_events?.toString() || "0"}
+          change="Last 24 hours"
+          changeType="neutral"
           icon={Shield}
           iconColor="text-info"
           delay={300}
         />
         <StatsCard
-          title="Alert Events"
-          value="23"
-          change="3 require attention"
-          changeType="neutral"
+          title="Active Threats"
+          value={stats?.active_threats?.toString() || "0"}
+          change={stats?.active_threats > 0 ? "Requires attention" : "All clear"}
+          changeType={stats?.active_threats > 0 ? "decrease" : "increase"}
           icon={AlertTriangle}
-          iconColor="text-warning"
+          iconColor={stats?.active_threats > 0 ? "text-warning" : "text-success"}
           delay={400}
         />
       </div>
@@ -85,26 +184,26 @@ export function Overview() {
               <AreaChart data={activityData}>
                 <defs>
                   <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(217, 33%, 20%)" />
                 <XAxis dataKey="time" stroke="hsl(215, 20%, 55%)" fontSize={12} />
                 <YAxis stroke="hsl(215, 20%, 55%)" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(222, 47%, 8%)", 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(222, 47%, 8%)",
                     border: "1px solid hsl(217, 33%, 20%)",
                     borderRadius: "8px"
                   }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="requests" 
-                  stroke="hsl(187, 100%, 50%)" 
-                  fillOpacity={1} 
-                  fill="url(#colorRequests)" 
+                <Area
+                  type="monotone"
+                  dataKey="requests"
+                  stroke="hsl(187, 100%, 50%)"
+                  fillOpacity={1}
+                  fill="url(#colorRequests)"
                   strokeWidth={2}
                 />
               </AreaChart>
@@ -121,17 +220,20 @@ export function Overview() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(217, 33%, 20%)" />
                 <XAxis dataKey="time" stroke="hsl(215, 20%, 55%)" fontSize={12} />
                 <YAxis stroke="hsl(215, 20%, 55%)" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(222, 47%, 8%)", 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(222, 47%, 8%, 0.7)",
                     border: "1px solid hsl(217, 33%, 20%)",
-                    borderRadius: "8px"
+                    borderRadius: "8px",
+                    opacity: 0.9
                   }}
                 />
-                <Bar 
-                  dataKey="threats" 
-                  fill="hsl(0, 84%, 60%)" 
+                <Bar
+                  dataKey="threats"
+                  fill="hsl(0, 84%, 60%)"
+                  fillOpacity={0.1}
                   radius={[4, 4, 0, 0]}
+                  activeBar={{ fillOpacity: 0.5 }}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -149,7 +251,7 @@ export function Overview() {
           </h3>
           <div className="space-y-3">
             {serviceHealth.map((service, index) => (
-              <div 
+              <div
                 key={service.name}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
               >
@@ -173,23 +275,43 @@ export function Overview() {
             Recent Events
           </h3>
           <div className="space-y-3">
-            {recentEvents.map((event) => (
-              <div 
-                key={event.id}
-                className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <div className={`w-2 h-2 rounded-full mt-2 ${
-                  event.severity === "error" ? "bg-destructive" :
-                  event.severity === "warning" ? "bg-warning" :
-                  event.severity === "success" ? "bg-success" :
-                  "bg-info"
-                }`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">{event.message}</p>
-                  <p className="text-xs text-muted-foreground">{event.time}</p>
+            {events.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">No recent events</p>
+            ) : (
+              events.slice(0, 5).map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <div className={`w-2 h-2 rounded-full mt-2 ${event.severity === "critical" || event.severity === "high" ? "bg-destructive" :
+                    event.severity === "medium" ? "bg-warning" :
+                      "bg-info"
+                    }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs px-2 py-0.5 rounded border ${getSeverityColor(event.severity)}`}>
+                        {event.severity.toUpperCase()}
+                      </span>
+                      <span className="text-sm font-medium text-foreground">{event.event_type.replace(/_/g, " ")}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        {event.ip_address}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Confidence: {(event.confidence_score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    {event.attack_vector && (
+                      <p className="text-xs text-muted-foreground truncate mb-1">
+                        {event.attack_vector}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">{formatTimeAgo(event.created_at)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
