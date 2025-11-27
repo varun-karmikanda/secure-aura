@@ -610,6 +610,103 @@ app.get(['/api/users', '/api/users/'], async (req, res) => {
   }
 });
 
+// Email configuration
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
+
+/**
+ * Lock User Account
+ */
+app.post('/api/users/:id/lock', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Lock indefinitely (or for a long time)
+    const lockedUntil = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000); // 100 years
+    await UserModel.updateStatus(id, { account_locked_until: lockedUntil });
+    res.json({ message: 'User account locked' });
+  } catch (error) {
+    logger.error(`Error locking user: ${error.message}`);
+    res.status(500).json({ error: 'Failed to lock user' });
+  }
+});
+
+/**
+ * Unlock User Account
+ */
+app.post('/api/users/:id/unlock', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await UserModel.updateStatus(id, { account_locked_until: null });
+    res.json({ message: 'User account unlocked' });
+  } catch (error) {
+    logger.error(`Error unlocking user: ${error.message}`);
+    res.status(500).json({ error: 'Failed to unlock user' });
+  }
+});
+
+/**
+ * Delete User
+ */
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await UserModel.delete(id);
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    logger.error(`Error deleting user: ${error.message}`);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+/**
+ * Update User
+ */
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, is_admin } = req.body;
+    const user = await UserModel.update(id, { username, email, is_admin });
+    res.json(user);
+  } catch (error) {
+    logger.error(`Error updating user: ${error.message}`);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+/**
+ * Send Email to User
+ */
+app.post('/api/users/:id/email', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subject, message } = req.body;
+    
+    const user = await UserModel.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM_EMAIL,
+      to: user.email,
+      subject: subject,
+      text: message
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ message: 'Email sent successfully' });
+  } catch (error) {
+    logger.error(`Error sending email: ${error.message}`);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
 /**
  * Get Current User Endpoint
  * Requires valid JWT token in Authorization header

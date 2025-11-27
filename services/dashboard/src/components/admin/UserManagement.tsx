@@ -62,9 +62,114 @@ export function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // New state for actions
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ username: "", email: "" });
+
+  useEffect(() => {
+    if (selectedUser) {
+      setEditForm({ username: selectedUser.username, email: selectedUser.email });
+    }
+  }, [selectedUser]);
+
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const handleStatusChange = async (userId: string, action: 'lock' | 'unlock') => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/${action}`, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`User ${action}ed successfully`);
+        fetchUsers();
+        setSelectedUser(null);
+      } else {
+        toast.error(`Failed to ${action} user`);
+      }
+    } catch (error) {
+      toast.error("Error updating user status");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("User deleted successfully");
+        fetchUsers();
+        setSelectedUser(null);
+      } else {
+        toast.error("Failed to delete user");
+      }
+    } catch (error) {
+      toast.error("Error deleting user");
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!selectedUser) return;
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/users/${selectedUser.id}/email`, {
+        method: 'POST',
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ subject: emailSubject, message: emailMessage })
+      });
+      if (res.ok) {
+        toast.success("Email sent successfully");
+        setIsEmailOpen(false);
+        setEmailSubject("");
+        setEmailMessage("");
+      } else {
+        toast.error("Failed to send email");
+      }
+    } catch (error) {
+      toast.error("Error sending email");
+    }
+  };
+
+  const handleEditUser = async () => {
+    if (!selectedUser) return;
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(editForm)
+      });
+      if (res.ok) {
+        toast.success("User updated successfully");
+        fetchUsers();
+        setIsEditOpen(false);
+        // Update selected user to reflect changes immediately in modal if we kept it open
+        // But we close it, so fetchUsers is enough
+        setSelectedUser(null);
+      } else {
+        toast.error("Failed to update user");
+      }
+    } catch (error) {
+      toast.error("Error updating user");
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -273,7 +378,7 @@ export function UserManagement() {
       </div>
 
       {/* User Details Modal */}
-      <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
+      <Dialog open={!!selectedUser} onOpenChange={() => { setSelectedUser(null); setIsEmailOpen(false); setIsEditOpen(false); }}>
         <DialogContent className="glass-strong border-border/50 max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
@@ -287,7 +392,7 @@ export function UserManagement() {
             </DialogTitle>
           </DialogHeader>
 
-          {selectedUser && (
+          {selectedUser && !isEmailOpen && !isEditOpen && (
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="glass rounded-lg p-3">
@@ -332,20 +437,73 @@ export function UserManagement() {
 
               <div className="flex gap-2 pt-4 border-t border-border/50">
                 {selectedUser.status === "locked" ? (
-                  <Button variant="success" className="flex-1">
+                  <Button variant="success" className="flex-1" onClick={() => handleStatusChange(selectedUser.id, 'unlock')}>
                     <Unlock className="w-4 h-4 mr-2" />
                     Unlock Account
                   </Button>
                 ) : (
-                  <Button variant="destructive" className="flex-1">
+                  <Button variant="destructive" className="flex-1" onClick={() => handleStatusChange(selectedUser.id, 'lock')}>
                     <Lock className="w-4 h-4 mr-2" />
                     Lock Account
                   </Button>
                 )}
-                <Button variant="outline" className="flex-1">
+                <Button variant="outline" className="flex-1" onClick={() => setIsEmailOpen(true)}>
                   <Mail className="w-4 h-4 mr-2" />
                   Send Email
                 </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setIsEditOpen(true)}>
+                  Edit User
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={() => handleDeleteUser(selectedUser.id)}>
+                  Delete User
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {selectedUser && isEmailOpen && (
+            <div className="space-y-4 mt-4">
+              <h3 className="text-lg font-medium">Send Email</h3>
+              <Input
+                placeholder="Subject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+              />
+              <textarea
+                className="w-full h-32 p-3 rounded-md bg-muted/50 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Message..."
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setIsEmailOpen(false)}>Cancel</Button>
+                <Button onClick={handleSendEmail}>Send</Button>
+              </div>
+            </div>
+          )}
+
+          {selectedUser && isEditOpen && (
+            <div className="space-y-4 mt-4">
+              <h3 className="text-lg font-medium">Edit User</h3>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Username</label>
+                <Input
+                  value={editForm.username}
+                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email</label>
+                <Input
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                <Button onClick={handleEditUser}>Save Changes</Button>
               </div>
             </div>
           )}

@@ -137,6 +137,49 @@ class UserModel {
     const result = await pool.query(query);
     return result.rows;
   }
+
+  /**
+   * Update user details
+   */
+  static async update(id, { username, email, is_admin }) {
+    const query = `
+      UPDATE users
+      SET username = COALESCE($2, username),
+          email = COALESCE($3, email),
+          is_admin = COALESCE($4, is_admin),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, username, email, is_active, is_admin
+    `;
+    const result = await pool.query(query, [id, username, email, is_admin]);
+    return result.rows[0];
+  }
+
+  /**
+   * Delete user
+   */
+  static async delete(id) {
+    const query = 'DELETE FROM users WHERE id = $1 RETURNING id';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+  }
+
+  /**
+   * Update user status (lock/unlock)
+   */
+  static async updateStatus(id, { is_active, account_locked_until }) {
+    const query = `
+      UPDATE users
+      SET is_active = COALESCE($2, is_active),
+          account_locked_until = $3,
+          failed_login_attempts = CASE WHEN $3 IS NULL THEN 0 ELSE failed_login_attempts END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, is_active, account_locked_until
+    `;
+    const result = await pool.query(query, [id, is_active, account_locked_until]);
+    return result.rows[0];
+  }
 }
 
 class AuthLogModel {
