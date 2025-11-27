@@ -201,16 +201,16 @@ async function continuousAnalysis() {
 async function detectBruteForce(ipAddress) {
   const recentFailures = await AuthLogModel.getFailedLoginsByIp(ipAddress, 5);
   
-  if (recentFailures.length >= 10) {
+  if (recentFailures.length >= 5) {
     const uniqueUsernames = new Set(recentFailures.map(f => f.username_attempted));
     
     // Create security event for brute force
     await SecurityEventModel.create({
       eventType: 'brute_force_attack',
-      severity: uniqueUsernames.size === 1 ? 'high' : 'critical', // Single user = credential stuffing, multiple = spray
+      severity: uniqueUsernames.size === 1 ? 'high' : 'critical', // Single user = targeted attack, multiple = spray
       ipAddress,
       attackVector: `${recentFailures.length} failed login attempts in 5 minutes targeting ${uniqueUsernames.size} username(s)`,
-      confidenceScore: Math.min(recentFailures.length / 15, 0.99),
+      confidenceScore: Math.min(recentFailures.length / 10, 0.99),
       evidence: {
         failedAttempts: recentFailures.length,
         uniqueUsernames: uniqueUsernames.size,

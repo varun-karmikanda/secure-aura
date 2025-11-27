@@ -100,7 +100,7 @@ class UserModel {
           last_failed_login = CURRENT_TIMESTAMP,
           account_locked_until = CASE
             WHEN failed_login_attempts + 1 >= 5
-            THEN CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+            THEN CURRENT_TIMESTAMP + INTERVAL '2 minutes'
             ELSE account_locked_until
           END,
           updated_at = CURRENT_TIMESTAMP

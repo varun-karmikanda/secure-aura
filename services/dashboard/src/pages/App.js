@@ -1,31 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-} from 'chart.js';
-import { Doughnut } from 'react-chartjs-2';
 import '../styles/App.css';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
 const API_BASE_URL = process.env.REACT_APP_MONITOR_API_URL || 'http://localhost:8001';
 
@@ -40,6 +15,36 @@ function App() {
     fetchData();
     const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Create Matrix rain effect
+    const createMatrixRain = () => {
+      const container = document.querySelector('.matrix-bg');
+      if (!container) return;
+
+      const columns = Math.floor(window.innerWidth / 20);
+      
+      for (let i = 0; i < columns; i++) {
+        const column = document.createElement('div');
+        column.className = 'matrix-column';
+        column.style.left = `${i * 20}px`;
+        column.style.animationDuration = `${Math.random() * 10 + 10}s`;
+        column.style.animationDelay = `${Math.random() * 5}s`;
+        
+        // Generate random binary string
+        let binaryString = '';
+        for (let j = 0; j < 30; j++) {
+          binaryString += Math.random() > 0.5 ? '1' : '0';
+          binaryString += '\n';
+        }
+        column.textContent = binaryString;
+        
+        container.appendChild(column);
+      }
+    };
+
+    createMatrixRain();
   }, []);
 
   const fetchData = async () => {
@@ -82,81 +87,125 @@ function App() {
     return 'text-green-600';
   };
 
-  if (loading) {
+  const getSystemStatus = () => {
+    // System down/error state
+    if (!stats && !loading) {
+      return (
+        <div className="flex items-center bg-gradient-to-r from-red-500/10 to-red-500/10 border border-red-500/20 px-4 py-2 rounded-full">
+          <div className="w-2 h-2 bg-red-500 rounded-full mr-2 shadow-lg shadow-red-500/50"></div>
+          <span className="text-red-400 text-sm font-bold tracking-wide">OFFLINE</span>
+        </div>
+      );
+    }
+    
+    // Loading state
+    if (!stats) {
+      return (
+        <div className="flex items-center bg-gradient-to-r from-gray-500/10 to-gray-500/10 border border-gray-500/20 px-4 py-2 rounded-full">
+          <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse mr-2 shadow-lg shadow-gray-500/50"></div>
+          <span className="text-gray-400 text-sm font-bold tracking-wide">CONNECTING</span>
+        </div>
+      );
+    }
+
+    // System is online
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-2xl">Loading Secure Aura Dashboard...</div>
+      <div className="flex items-center bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 px-4 py-2 rounded-full">
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2 shadow-lg shadow-green-500/50"></div>
+        <span className="text-green-400 text-sm font-bold tracking-wide">ONLINE</span>
       </div>
     );
-  }
-
-  const authChartData = {
-    labels: ['Successful', 'Failed'],
-    datasets: [
-      {
-        label: 'Authentication Attempts',
-        data: [stats?.successful_logins || 0, stats?.failed_logins || 0],
-        backgroundColor: ['rgba(34, 197, 94, 0.8)', 'rgba(239, 68, 68, 0.8)'],
-        borderColor: ['rgb(34, 197, 94)', 'rgb(239, 68, 68)'],
-        borderWidth: 2,
-      },
-    ],
   };
 
-  const threatChartData = {
-    labels: ['Active Threats', 'Resolved'],
-    datasets: [
-      {
-        data: [
-          stats?.active_threats || 0,
-          (stats?.security_events || 0) - (stats?.active_threats || 0),
-        ],
-        backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(34, 197, 94, 0.8)'],
-        borderColor: ['rgb(239, 68, 68)', 'rgb(34, 197, 94)'],
-        borderWidth: 2,
-      },
-    ],
+  const getThreatStatus = () => {
+    if (!stats) return null;
+
+    const activeThreatCount = stats.active_threats || 0;
+    const totalEvents = stats.security_events || 0;
+    
+    // Critical: Multiple active threats
+    if (activeThreatCount >= 3) {
+      return (
+        <div className="flex items-center bg-gradient-to-r from-red-500/10 to-red-500/10 border border-red-500/20 px-4 py-2 rounded-full">
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2 shadow-lg shadow-red-500/50"></div>
+          <span className="text-red-400 text-sm font-bold tracking-wide">⚠️ CRITICAL</span>
+        </div>
+      );
+    }
+    
+    // Warning: Some active threats
+    if (activeThreatCount > 0) {
+      return (
+        <div className="flex items-center bg-gradient-to-r from-orange-500/10 to-orange-500/10 border border-orange-500/20 px-4 py-2 rounded-full">
+          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-2 shadow-lg shadow-orange-500/50"></div>
+          <span className="text-orange-400 text-sm font-bold tracking-wide">🔶 ALERT</span>
+        </div>
+      );
+    }
+    
+    // Normal: No active threats but has detected some events
+    if (totalEvents > 0) {
+      return (
+        <div className="flex items-center bg-gradient-to-r from-blue-500/10 to-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2 shadow-lg shadow-blue-500/50"></div>
+          <span className="text-blue-400 text-sm font-bold tracking-wide">👁️ MONITORING</span>
+        </div>
+      );
+    }
+    
+    // All clear
+    return (
+      <div className="flex items-center bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-500/20 px-4 py-2 rounded-full">
+        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse mr-2 shadow-lg shadow-emerald-500/50"></div>
+        <span className="text-emerald-400 text-sm font-bold tracking-wide">✓ SECURE</span>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-zinc-950">
+      {/* Matrix Rain Background */}
+      <div className="matrix-bg"></div>
+      
+      {/* Content with higher z-index */}
+      <div className="relative z-10">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="bg-zinc-950/50 backdrop-blur-xl border-b border-zinc-800/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-xl">SA</span>
-                </div>
+                <img 
+                  src="/secure-aura.png" 
+                  alt="Secure Aura Logo" 
+                  className="w-14 h-14 rounded-2xl shadow-lg shadow-cyan-500/30"
+                />
               </div>
               <div className="ml-4">
-                <h1 className="text-2xl font-bold text-white">Secure Aura</h1>
-                <p className="text-sm text-gray-400">Timing Attack Defense Framework</p>
+                <h1 className="text-3xl font-black text-white tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Secure Aura</h1>
+                <p className="text-sm text-gray-500 font-semibold tracking-wide">TIMING ATTACK DEFENSE FRAMEWORK</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center bg-green-900 px-3 py-1 rounded-full">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
-                <span className="text-green-400 text-sm font-medium">System Active</span>
-              </div>
+            <div className="flex items-center space-x-3">
+              {getSystemStatus()}
+              {getThreatStatus()}
             </div>
           </div>
         </div>
       </header>
 
       {/* Navigation Tabs */}
-      <div className="bg-gray-800 border-b border-gray-700">
+      <div className="bg-zinc-950/50 backdrop-blur-xl border-b border-zinc-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
+          <div className="flex space-x-2">
             {['overview', 'threats', 'analytics'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                className={`py-3 px-6 font-bold text-sm uppercase tracking-wider transition-all duration-200 ${
                   activeTab === tab
-                    ? 'border-blue-500 text-blue-500'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-t-xl shadow-lg shadow-blue-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-zinc-800/50 rounded-t-xl'
                 }`}
               >
                 {tab}
@@ -200,26 +249,80 @@ function App() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                <h3 className="text-lg font-semibold text-white mb-4">
+              {/* Authentication Stats */}
+              <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-8 border border-zinc-800/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+                <h3 className="text-xl font-black text-white mb-6 tracking-tight">
                   Authentication Overview
                 </h3>
-                <Doughnut data={authChartData} options={{ maintainAspectRatio: true }} />
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 font-semibold">Successful Logins</span>
+                    <span className="text-2xl font-bold text-green-400">{stats?.successful_logins || 0}</span>
+                  </div>
+                  <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(stats?.successful_logins / (stats?.total_auth_attempts || 1)) * 100}%` }}
+                    ></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-6">
+                    <span className="text-gray-400 font-semibold">Failed Attempts</span>
+                    <span className="text-2xl font-bold text-red-400">{stats?.failed_logins || 0}</span>
+                  </div>
+                  <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(stats?.failed_logins / (stats?.total_auth_attempts || 1)) * 100}%` }}
+                    ></div>
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-zinc-800">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500 text-sm font-semibold">Success Rate</span>
+                      <span className="text-xl font-bold text-cyan-400">
+                        {((stats?.successful_logins / (stats?.total_auth_attempts || 1)) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                <h3 className="text-lg font-semibold text-white mb-4">Threat Status</h3>
-                <Doughnut data={threatChartData} options={{ maintainAspectRatio: true }} />
+
+              {/* Threat Stats */}
+              <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-8 border border-zinc-800/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+                <h3 className="text-xl font-black text-white mb-6 tracking-tight">Threat Status</h3>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <div>
+                      <p className="text-sm text-gray-400 font-semibold">Active Threats</p>
+                      <p className="text-3xl font-black text-red-400 mt-1">{stats?.active_threats || 0}</p>
+                    </div>
+                    <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center">
+                      <span className="text-3xl">⚠️</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <div>
+                      <p className="text-sm text-gray-400 font-semibold">Total Events</p>
+                      <p className="text-3xl font-black text-blue-400 mt-1">{stats?.security_events || 0}</p>
+                    </div>
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center">
+                      <span className="text-3xl">🛡️</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Recent Events */}
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-4">Recent Security Events</h3>
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-8 border border-zinc-800/50 shadow-xl">
+              <h3 className="text-xl font-black text-white mb-6 tracking-tight">Recent Security Events</h3>
               <div className="space-y-3">
                 {events.slice(0, 5).map((event) => (
                   <div
                     key={event.id}
-                    className="bg-gray-700 rounded-lg p-4 flex items-center justify-between"
+                    className="bg-zinc-900/50 backdrop-blur rounded-xl p-5 flex items-center justify-between border border-zinc-800/30 hover:border-zinc-700/50 transition-all duration-200"
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-3">
@@ -248,10 +351,10 @@ function App() {
 
         {activeTab === 'threats' && (
           <div className="space-y-6">
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="bg-zinc-950 rounded-lg p-6 border border-zinc-800">
               <h3 className="text-lg font-semibold text-white mb-4">All Security Events</h3>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
+                <table className="min-w-full divide-y divide-zinc-800">
                   <thead>
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -274,7 +377,7 @@ function App() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-700">
+                  <tbody className="divide-y divide-zinc-800">
                     {events.map((event) => (
                       <tr key={event.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -316,10 +419,10 @@ function App() {
 
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="bg-zinc-950 rounded-lg p-6 border border-zinc-800">
               <h3 className="text-lg font-semibold text-white mb-4">Timing Analysis Results</h3>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
+                <table className="min-w-full divide-y divide-zinc-800">
                   <thead>
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -342,7 +445,7 @@ function App() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-700">
+                  <tbody className="divide-y divide-zinc-800">
                     {timingAnalysis.map((analysis) => (
                       <tr key={analysis.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -378,6 +481,7 @@ function App() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }
@@ -391,7 +495,7 @@ function StatCard({ title, value, icon, color }) {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+    <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-8 border border-zinc-800/50 shadow-lg hover:shadow-xl transition-all duration-300">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-400 text-sm font-medium">{title}</p>
