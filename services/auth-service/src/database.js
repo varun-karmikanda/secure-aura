@@ -1,4 +1,4 @@
-/**
+   /**
  * Database configuration and models using PostgreSQL
  */
 
@@ -159,6 +159,10 @@ class UserModel {
    * Delete user
    */
   static async delete(id) {
+    // Delete related auth_logs first to avoid foreign key constraint violation
+    await pool.query('DELETE FROM auth_logs WHERE user_id = $1', [id]);
+    
+    // Now delete the user
     const query = 'DELETE FROM users WHERE id = $1 RETURNING id';
     const result = await pool.query(query, [id]);
     return result.rows[0];
@@ -170,8 +174,8 @@ class UserModel {
   static async updateStatus(id, { is_active, account_locked_until }) {
     const query = `
       UPDATE users
-      SET is_active = COALESCE($2, is_active),
-          account_locked_until = $3,
+      SET is_active = COALESCE($2::boolean, is_active),
+          account_locked_until = $3::timestamp,
           failed_login_attempts = CASE WHEN $3 IS NULL THEN 0 ELSE failed_login_attempts END,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1

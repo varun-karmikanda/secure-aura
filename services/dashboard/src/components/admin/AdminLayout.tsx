@@ -1,15 +1,19 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  Send, 
-  Users, 
-  FileText, 
-  Shield, 
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import {
+  LayoutDashboard,
+  Send,
+  Users,
+  FileText,
+  Shield,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Zap
+  Zap,
+  LogOut,
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -30,11 +34,18 @@ const navItems = [
 
 export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAdminAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/admin-aura/login");
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <aside 
+      <aside
         className={cn(
           "fixed left-0 top-0 h-full glass-strong z-50 flex flex-col transition-all duration-300",
           collapsed ? "w-16" : "w-64"
@@ -55,6 +66,21 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
           </div>
         </div>
 
+        {/* Admin User Info */}
+        {!collapsed && user && (
+          <div className="p-3 border-b border-border/50 bg-accent/20">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <User className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{user.username}</p>
+                <p className="text-xs text-muted-foreground">Administrator</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item, index) => {
@@ -72,14 +98,14 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
                 )}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                <Icon 
+                <Icon
                   className={cn(
                     "w-5 h-5 transition-colors",
                     isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                  )} 
+                  )}
                 />
                 {!collapsed && (
-                  <span 
+                  <span
                     className={cn(
                       "text-sm font-medium transition-colors",
                       isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
@@ -92,6 +118,22 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
             );
           })}
         </nav>
+
+        {/* Logout Button */}
+        <div className="p-3 border-t border-border/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className={cn(
+              "w-full text-destructive hover:text-destructive hover:bg-destructive/10",
+              collapsed ? "justify-center" : "justify-start"
+            )}
+          >
+            <LogOut className="w-4 h-4" />
+            {!collapsed && <span className="ml-2">Logout</span>}
+          </Button>
+        </div>
 
         {/* Collapse Toggle */}
         <div className="p-3 border-t border-border/50">
@@ -111,7 +153,7 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
       </aside>
 
       {/* Main Content */}
-      <main 
+      <main
         className={cn(
           "flex-1 transition-all duration-300",
           collapsed ? "ml-16" : "ml-64"

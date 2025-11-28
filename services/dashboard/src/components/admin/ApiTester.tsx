@@ -45,7 +45,7 @@ const methodColors: Record<HttpMethod, string> = {
   PATCH: "bg-primary/20 text-primary border-primary/30",
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 const secureAuraEndpoints: SavedRequest[] = [
   {
@@ -272,7 +272,7 @@ export function ApiTester() {
       {/* Header */}
       <div className="animate-fade-in">
         <h1 className="text-3xl font-bold gradient-text">API Tester</h1>
-        <p className="text-muted-foreground mt-1">Test and debug your API endpoints</p>
+        {/* <p className="text-muted-foreground mt-1">Test and debug your API endpoints</p> */}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">

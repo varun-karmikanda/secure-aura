@@ -745,6 +745,163 @@ app.get('/api/users/me', async (req, res) => {
   }
 });
 
+// =============================================================================
+// ADMIN AUTHENTICATION ROUTES
+// =============================================================================
+
+const bcrypt = require('bcrypt');
+
+/**
+ * Admin Login Endpoint
+ * For dashboard authentication - uses admins table
+ */
+app.post('/api/admin/login',
+  [
+    body('username').notEmpty().withMessage('Username is required'),
+    body('password').notEmpty().withMessage('Password is required')
+  ],
+  async (req, res) => {
+    const startTime = performance.now();
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    // Validate input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { username, password } = req.body;
+
+    try {
+      // Query admin user from admins table
+      const adminQuery = await pool.query(
+        'SELECT * FROM admins WHERE username = $1 AND is_active = true',
+        [username]
+      );
+
+      const admin = adminQuery.rows[0];
+
+      // Always perform a password comparison to prevent timing attacks
+      let passwordValid = false;
+      if (admin) {
+        // Real password verification
+        passwordValid = await bcrypt.compare(password, admin.password_hash);
+      } else {
+        // Dummy comparison to maintain constant time
+        const dummyHash = '$2b$10$rKZN8vW5vJ5L5JfQYxKQEO7YZvH5Z5T5L5L5L5L5L5L5L5L5L5L5e';
+        await bcrypt.compare(password, dummyHash);
+      }
+
+      if (admin && passwordValid) {
+        // Update last login
+        await pool.query(
+          'UPDATE admins SET last_login = NOW() WHERE id = $1',
+          [admin.id]
+        );
+
+        // Create JWT token with admin flag
+        const token = createJwtToken(admin.id, admin.username, true);
+
+        logger.info(`Admin login success: ${username} from ${ipAddress}`);
+
+        return res.json({
+          access_token: token,
+          token_type: 'bearer',
+          expires_in: JWT_EXPIRATION,
+          admin_id: admin.id,
+          username: admin.username
+        });
+      } else {
+        logger.warn(`Admin login failed: ${username} from ${ipAddress}`);
+        return res.status(401).json({
+          error: 'Invalid credentials'
+        });
+      }
+
+    } catch (error) {
+      logger.error(`Admin login error: ${error.message}`);
+      res.status(500).json({ error: 'Authentication failed' });
+    }
+  }
+);
+
+/**
+ * Admin Token Verification Endpoint
+ */
+app.get('/api/admin/verify',
+  async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Missing or invalid authorization header'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+      // Decode and verify token
+      const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
+      
+      // Verify it's an admin token
+      if (!payload.is_admin) {
+        return res.status(403).json({ error: 'Not an admin account' });
+      }
+
+      const adminId = payload.user_id;
+      const username = payload.username;
+
+      // Verify admin still exists and is active
+      const adminQuery = await pool.query(
+        'SELECT * FROM admins WHERE id = $1 AND is_active = true',
+        [adminId]
+      );
+
+      const admin = adminQuery.rows[0];
+
+      if (admin) {
+        return res.json({
+          valid: true,
+          admin_id: adminId,
+          username: username,
+          is_admin: true
+        });
+      } else {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+
+    } catch (error) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  }
+);
+
+/**
+ * Admin Logout Endpoint
+ * Note: Since we're using stateless JWT, logout is handled client-side
+ * This endpoint is for logging purposes
+ */
+app.post('/api/admin/logout',
+  async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
+        logger.info(`Admin logout: ${payload.username}`);
+      } catch (error) {
+        // Token invalid, but that's okay for logout
+      }
+    }
+    res.json({ message: 'Logged out successfully' });
+  }
+);
+
+// =============================================================================
+// END ADMIN AUTHENTICATION ROUTES
+// =============================================================================
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error(`Error: ${err.message}`);

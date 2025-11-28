@@ -50,44 +50,71 @@ export function Overview() {
   };
 
   const processTimingData = (timingAnalyses: any[], securityEvents: any[]) => {
-    // Group data by hour for the last 24 hours
     const now = new Date();
-    const hourlyData: { [key: string]: { requests: number; threats: number } } = {};
+    const hourlyData: { [key: string]: { requests: number; threats: number; timestamp: Date } } = {};
 
-    // Initialize last 24 hours
-    for (let i = 23; i >= 0; i--) {
-      const hour = new Date(now.getTime() - i * 60 * 60 * 1000);
-      const timeKey = hour.getHours().toString().padStart(2, '0') + ':00';
-      hourlyData[timeKey] = { requests: 0, threats: 0 };
+    // Initialize last 12 hours (more reasonable view)
+    for (let i = 11; i >= 0; i--) {
+      const hourDate = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const timeKey = hourDate.getHours().toString().padStart(2, '0');
+      hourlyData[timeKey] = {
+        requests: 0,
+        threats: 0,
+        timestamp: hourDate
+      };
     }
 
     // Count requests from timing analysis
     timingAnalyses.forEach(analysis => {
+      if (!analysis.created_at) return;
       const date = new Date(analysis.created_at);
-      const timeKey = date.getHours().toString().padStart(2, '0') + ':00';
-      if (hourlyData[timeKey]) {
-        hourlyData[timeKey].requests += analysis.request_count || 0;
+      const hoursSinceCreation = (now.getTime() - date.getTime()) / (60 * 60 * 1000);
+
+      // Only include data from last 12 hours
+      if (hoursSinceCreation <= 12) {
+        const timeKey = date.getHours().toString().padStart(2, '0');
+        if (hourlyData[timeKey]) {
+          hourlyData[timeKey].requests += analysis.request_count || 1;
+        }
       }
     });
 
     // Count threats from security events
     securityEvents.forEach(event => {
+      if (!event.created_at) return;
       const date = new Date(event.created_at);
-      const timeKey = date.getHours().toString().padStart(2, '0') + ':00';
-      if (hourlyData[timeKey]) {
-        hourlyData[timeKey].threats += 1;
+      const hoursSinceCreation = (now.getTime() - date.getTime()) / (60 * 60 * 1000);
+
+      // Only include data from last 12 hours
+      if (hoursSinceCreation <= 12) {
+        const timeKey = date.getHours().toString().padStart(2, '0');
+        if (hourlyData[timeKey]) {
+          hourlyData[timeKey].threats += 1;
+        }
       }
     });
 
-    // Convert to array for chart, showing only last 7 hours + current
-    const hours = Object.keys(hourlyData).sort();
-    const recentHours = hours.slice(-8);
+    // Convert to array for chart and format time labels
+    return Object.keys(hourlyData)
+      .sort()
+      .map((hourKey) => {
+        const data = hourlyData[hourKey];
+        const hour = data.timestamp.getHours();
 
-    return recentHours.map((time, index) => ({
-      time: index === recentHours.length - 1 ? 'Now' : time,
-      requests: hourlyData[time].requests,
-      threats: hourlyData[time].threats,
-    }));
+        // Format time label - just show hour
+        let timeLabel: string;
+        if (hour === now.getHours() && now.getMinutes() < 30) {
+          timeLabel = 'Now';
+        } else {
+          timeLabel = hour.toString().padStart(2, '0');
+        }
+
+        return {
+          time: timeLabel,
+          requests: data.requests,
+          threats: data.threats,
+        };
+      });
   };
 
   const getSeverityColor = (severity: string) => {
@@ -132,7 +159,7 @@ export function Overview() {
       {/* Header */}
       <div className="animate-fade-in">
         <h1 className="text-3xl font-bold gradient-text">Dashboard Overview</h1>
-        <p className="text-muted-foreground mt-1">Monitor your system health and security metrics</p>
+        {/* <p className="text-muted-foreground mt-1">Monitor your system health and security metrics</p> */}
       </div>
 
       {/* Stats Grid */}
@@ -189,8 +216,17 @@ export function Overview() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(217, 33%, 20%)" />
-                <XAxis dataKey="time" stroke="hsl(215, 20%, 55%)" fontSize={12} />
-                <YAxis stroke="hsl(215, 20%, 55%)" fontSize={12} />
+                <XAxis
+                  dataKey="time"
+                  stroke="hsl(215, 20%, 55%)"
+                  fontSize={12}
+                  label={{ value: 'Hour', position: 'insideBottom', offset: -5, fill: 'hsl(215, 20%, 55%)' }}
+                />
+                <YAxis
+                  stroke="hsl(215, 20%, 55%)"
+                  fontSize={12}
+                  label={{ value: 'Requests', angle: -90, position: 'insideLeft', fill: 'hsl(215, 20%, 55%)' }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(222, 47%, 8%)",
@@ -218,8 +254,17 @@ export function Overview() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={activityData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(217, 33%, 20%)" />
-                <XAxis dataKey="time" stroke="hsl(215, 20%, 55%)" fontSize={12} />
-                <YAxis stroke="hsl(215, 20%, 55%)" fontSize={12} />
+                <XAxis
+                  dataKey="time"
+                  stroke="hsl(215, 20%, 55%)"
+                  fontSize={12}
+                  label={{ value: 'Hour', position: 'insideBottom', offset: -5, fill: 'hsl(215, 20%, 55%)' }}
+                />
+                <YAxis
+                  stroke="hsl(215, 20%, 55%)"
+                  fontSize={12}
+                  label={{ value: 'Threats', angle: -90, position: 'insideLeft', fill: 'hsl(215, 20%, 55%)' }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(222, 47%, 8%, 0.7)",

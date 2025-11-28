@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
   Search,
   Filter,
@@ -14,7 +15,7 @@ import {
   X,
   Lock,
   Unlock,
-  Eye
+  Settings
 } from "lucide-react";
 import {
   Dialog,
@@ -41,7 +42,7 @@ interface User {
   account_locked_until: string | null;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 const statusStyles = {
   active: "bg-success/20 text-success border-success/30",
@@ -61,6 +62,9 @@ export function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Get admin token from auth context
+  const adminToken = localStorage.getItem("admin_token");
 
   // New state for actions
   const [isEmailOpen, setIsEmailOpen] = useState(false);
@@ -82,10 +86,9 @@ export function UserManagement() {
 
   const handleStatusChange = async (userId: string, action: 'lock' | 'unlock') => {
     try {
-      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/users/${userId}/${action}`, {
         method: 'POST',
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { "Authorization": `Bearer ${adminToken}` }
       });
       if (res.ok) {
         toast.success(`User ${action}ed successfully`);
@@ -102,10 +105,9 @@ export function UserManagement() {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
-      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'DELETE',
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { "Authorization": `Bearer ${adminToken}` }
       });
       if (res.ok) {
         toast.success("User deleted successfully");
@@ -122,11 +124,10 @@ export function UserManagement() {
   const handleSendEmail = async () => {
     if (!selectedUser) return;
     try {
-      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/users/${selectedUser.id}/email`, {
         method: 'POST',
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${adminToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ subject: emailSubject, message: emailMessage })
@@ -147,11 +148,10 @@ export function UserManagement() {
   const handleEditUser = async () => {
     if (!selectedUser) return;
     try {
-      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${adminToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(editForm)
@@ -174,17 +174,16 @@ export function UserManagement() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        // If no token, we can't fetch. Just show empty or maybe a message?
-        // For now, let's just stop loading.
+      if (!adminToken) {
+        // If no admin token, user is not authenticated
         setLoading(false);
+        toast.error("Please login to access user management");
         return;
       }
 
       const res = await fetch(`${API_BASE_URL}/api/users/`, {
         headers: {
-          "Authorization": `Bearer ${token}`
+          "Authorization": `Bearer ${adminToken}`
         }
       });
 
@@ -234,7 +233,6 @@ export function UserManagement() {
       <div className="flex items-center justify-between animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold gradient-text">User Management</h1>
-          <p className="text-muted-foreground mt-1">Manage user accounts and permissions</p>
         </div>
         <Button className="glow" onClick={fetchUsers}>
           <UserPlus className="w-4 h-4 mr-2" />
@@ -312,7 +310,7 @@ export function UserManagement() {
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                    No users found. {localStorage.getItem("auth_token") ? "" : "Please login via API Tester first."}
+                    No users found. {adminToken ? "" : "Please login to access user data."}
                   </td>
                 </tr>
               ) : (
@@ -358,14 +356,7 @@ export function UserManagement() {
                           onClick={() => setSelectedUser(user)}
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        >
-                          <MoreVertical className="w-4 h-4" />
+                          <Settings className="w-4 h-4" />
                         </Button>
                       </div>
                     </td>

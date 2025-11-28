@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS users (
     last_login TIMESTAMP
 );
 
+-- Admin users table for dashboard authentication
+CREATE TABLE IF NOT EXISTS admins (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(512) NOT NULL,
+    salt VARCHAR(128) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+);
+
 -- Audit log for all authentication attempts
 CREATE TABLE IF NOT EXISTS auth_logs (
     id SERIAL PRIMARY KEY,
@@ -146,6 +158,15 @@ INSERT INTO users (username, email, password_hash, salt, is_admin) VALUES
      true)
 ON CONFLICT (username) DO NOTHING;
 
+-- Insert default admin for dashboard (username: secureadmin, password: superadmin123)
+-- Using bcrypt hash for the password
+INSERT INTO admins (username, password_hash, salt, is_active) VALUES
+    ('secureadmin', 
+     '$2b$10$6QqFPgAvtvyMlPV38PNMCOj8dnHXpjE1ILoLFUqQgVff/v.A0E8Wi',
+     'bcrypt_salt_included_in_hash',
+     true)
+ON CONFLICT (username) DO NOTHING;
+
 -- Create trigger for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -156,6 +177,9 @@ END;
 $$ language 'plpgsql';
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_admins_updated_at BEFORE UPDATE ON admins
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_timing_analysis_updated_at BEFORE UPDATE ON timing_analysis
