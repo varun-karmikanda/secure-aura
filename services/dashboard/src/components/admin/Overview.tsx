@@ -225,6 +225,7 @@ export function Overview() {
                 <YAxis
                   stroke="hsl(215, 20%, 55%)"
                   fontSize={12}
+                  domain={['auto', 'auto']}
                   label={{ value: 'Requests', angle: -90, position: 'insideLeft', fill: 'hsl(215, 20%, 55%)' }}
                 />
                 <Tooltip
@@ -276,9 +277,9 @@ export function Overview() {
                 <Bar
                   dataKey="threats"
                   fill="hsl(0, 84%, 60%)"
-                  fillOpacity={0.1}
+                  fillOpacity={0.8}
                   radius={[4, 4, 0, 0]}
-                  activeBar={{ fillOpacity: 0.5 }}
+                  activeBar={{ fillOpacity: 1 }}
                 />
               </BarChart>
             </ResponsiveContainer>

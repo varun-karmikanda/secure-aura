@@ -1,57 +1,65 @@
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { 
-  Shield, 
-  Lock, 
-  Key, 
-  AlertTriangle, 
+import {
+  Shield,
+  Lock,
+  Key,
+  AlertTriangle,
   CheckCircle,
   Globe,
   Fingerprint,
-  Eye
+  Eye,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
-const securityFeatures = [
-  { 
-    id: "rate-limiting", 
-    name: "Rate Limiting", 
+interface SecurityFeature {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  icon: any;
+  status: string;
+  value?: any;
+}
+
+const defaultFeatures: SecurityFeature[] = [
+  {
+    id: "rate-limiting",
+    name: "Rate Limiting",
     description: "Limit requests per IP address",
-    enabled: true, 
+    enabled: true,
     icon: Globe,
-    status: "Active - 100 req/min"
+    status: "Active - 100 req/min",
+    value: 100
   },
-  { 
-    id: "jwt-auth", 
-    name: "JWT Authentication", 
+  {
+    id: "jwt-auth",
+    name: "JWT Authentication",
     description: "Secure token-based authentication",
-    enabled: true, 
+    enabled: true,
     icon: Key,
-    status: "RS256 Algorithm"
+    status: "RS256 Algorithm",
+    value: "RS256"
   },
-  { 
-    id: "brute-force", 
-    name: "Brute Force Protection", 
+  {
+    id: "brute-force",
+    name: "Brute Force Protection",
     description: "Auto-lock after failed attempts",
-    enabled: true, 
+    enabled: true,
     icon: Lock,
-    status: "5 attempts / 15 min"
+    status: "5 attempts / 15 min",
+    value: 5
   },
-  { 
-    id: "threat-detection", 
-    name: "Threat Detection", 
+  {
+    id: "threat-detection",
+    name: "Threat Detection",
     description: "ML-powered anomaly detection",
-    enabled: true, 
+    enabled: true,
     icon: Eye,
-    status: "Real-time monitoring"
-  },
-  { 
-    id: "2fa", 
-    name: "Two-Factor Auth", 
-    description: "Optional 2FA for users",
-    enabled: false, 
-    icon: Fingerprint,
-    status: "Disabled"
+    status: "Real-time monitoring",
+    value: "active"
   },
 ];
 
@@ -62,13 +70,152 @@ const recentThreats = [
   { id: 4, type: "Invalid Token", ip: "192.168.2.50", time: "1 hour ago", blocked: true },
 ];
 
-export function SecurityPanel() {
+export function SecurityPanel({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+  const [securityFeatures, setSecurityFeatures] = useState<SecurityFeature[]>(defaultFeatures);
+  const [loading, setLoading] = useState(false);
+  const [threats, setThreats] = useState<any[]>([]);
+  const [isLive, setIsLive] = useState(false);
+
+  // Fetch security settings and threats
+  useEffect(() => {
+    fetchSettings();
+    fetchThreats();
+
+    let interval: NodeJS.Timeout;
+    if (isLive) {
+      interval = setInterval(fetchThreats, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [isLive]);
+
+  const fetchThreats = async () => {
+    try {
+      const response = await fetch('http://localhost:8001/api/monitor/events?limit=5');
+      if (response.ok) {
+        const data = await response.json();
+        setThreats(data.events || []);
+      }
+    } catch (error) {
+      console.error('Error fetching threats:', error);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/admin/security/settings');
+      if (response.ok) {
+        const data = await response.json();
+        const settings = data.settings;
+
+        // Update features with API data
+        const updatedFeatures = defaultFeatures.map(feature => {
+          const apiSetting = settings[feature.id];
+          if (apiSetting) {
+            return {
+              ...feature,
+              enabled: apiSetting.enabled,
+              value: apiSetting.value,
+              status: getStatus(feature.id, apiSetting.enabled, apiSetting.value)
+            };
+          }
+          return feature;
+        });
+
+        setSecurityFeatures(updatedFeatures);
+      }
+    } catch (error) {
+      console.error('Error fetching security settings:', error);
+    }
+  };
+
+  const getStatus = (id: string, enabled: boolean, value: any): string => {
+    if (!enabled) return "Disabled";
+
+    switch (id) {
+      case "rate-limiting":
+        return `Active - ${value} req/min`;
+      case "brute-force":
+        return `${value} attempts / 15 min`;
+      case "jwt-auth":
+        return `${value} Algorithm`;
+      case "threat-detection":
+        return "Real-time monitoring";
+      case "2fa":
+        return enabled ? "Enabled" : "Disabled";
+      default:
+        return enabled ? "Enabled" : "Disabled";
+    }
+  };
+
+  const handleToggle = async (featureId: string, currentEnabled: boolean) => {
+    setLoading(true);
+    try {
+      const feature = securityFeatures.find(f => f.id === featureId);
+      const newEnabled = !currentEnabled;
+
+      const response = await fetch('http://localhost:8000/api/admin/security/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settingId: featureId,
+          enabled: newEnabled,
+          value: feature?.value
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        setSecurityFeatures(prev => prev.map(f => {
+          if (f.id === featureId) {
+            return {
+              ...f,
+              enabled: newEnabled,
+              status: getStatus(f.id, newEnabled, f.value)
+            };
+          }
+          return f;
+        }));
+      } else {
+        console.error('Failed to update setting');
+      }
+    } catch (error) {
+      console.error('Error updating security setting:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="animate-fade-in">
-        <h1 className="text-3xl font-bold gradient-text">Security Center</h1>
-        <p className="text-muted-foreground mt-1">Monitor and configure security settings</p>
+      <div className="flex items-center justify-between animate-fade-in">
+        <div>
+          <h1 className="text-3xl font-bold gradient-text">Security Center</h1>
+          {/* <p className="text-muted-foreground mt-1">Monitor and configure security settings</p> */}
+        </div>
+        <Button
+          variant={isLive ? "glow" : "outline"}
+          onClick={() => setIsLive(!isLive)}
+          className={cn(isLive && "animate-pulse-glow")}
+        >
+          <RefreshCw className={cn("w-4 h-4 mr-2", isLive && "animate-spin")} />
+          {isLive ? "Live" : "Paused"}
+        </Button>
       </div>
 
       {/* Security Score */}
@@ -96,7 +243,7 @@ export function SecurityPanel() {
                 strokeWidth="8"
                 fill="none"
                 strokeDasharray={251.2}
-                strokeDashoffset={251.2 * 0.15}
+                strokeDashoffset={251.2 * (1 - (securityFeatures.filter(f => f.enabled).length / securityFeatures.length))}
                 strokeLinecap="round"
               />
               <defs>
@@ -107,7 +254,9 @@ export function SecurityPanel() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold gradient-text">85</span>
+              <span className="text-2xl font-bold gradient-text">
+                {Math.round((securityFeatures.filter(f => f.enabled).length / securityFeatures.length) * 100)}
+              </span>
             </div>
           </div>
         </div>
@@ -124,7 +273,7 @@ export function SecurityPanel() {
             {securityFeatures.map((feature, index) => {
               const Icon = feature.icon;
               return (
-                <div 
+                <div
                   key={feature.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors animate-fade-in"
                   style={{ animationDelay: `${200 + index * 50}ms` }}
@@ -151,7 +300,11 @@ export function SecurityPanel() {
                     )}>
                       {feature.status}
                     </span>
-                    <Switch checked={feature.enabled} />
+                    <Switch
+                      checked={feature.enabled}
+                      onCheckedChange={() => handleToggle(feature.id, feature.enabled)}
+                      disabled={loading}
+                    />
                   </div>
                 </div>
               );
@@ -166,29 +319,37 @@ export function SecurityPanel() {
             Recent Threats Blocked
           </h3>
           <div className="space-y-3">
-            {recentThreats.map((threat, index) => (
-              <div 
-                key={threat.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/20 animate-fade-in"
-                style={{ animationDelay: `${300 + index * 50}ms` }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-destructive/10">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
+            {threats.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">No recent threats detected</p>
+            ) : (
+              threats.map((threat, index) => (
+                <div
+                  key={threat.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/20 animate-fade-in"
+                  style={{ animationDelay: `${300 + index * 50}ms` }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-destructive/10">
+                      <AlertTriangle className="w-4 h-4 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">{threat.event_type.replace(/_/g, ' ')}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{threat.ip_address}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground text-sm">{threat.type}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{threat.ip}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{formatTimeAgo(threat.created_at)}</span>
+                    <CheckCircle className="w-4 h-4 text-success" />
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{threat.time}</span>
-                  <CheckCircle className="w-4 h-4 text-success" />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-          <Button variant="outline" className="w-full mt-4">
+          <Button
+            variant="outline"
+            className="w-full mt-4"
+            onClick={() => onNavigate?.('logs')}
+          >
             View All Threats
           </Button>
         </div>

@@ -11,17 +11,17 @@ interface StatsCardProps {
   delay?: number;
 }
 
-export function StatsCard({ 
-  title, 
-  value, 
-  change, 
-  changeType = "neutral", 
+export function StatsCard({
+  title,
+  value,
+  change,
+  changeType = "neutral",
   icon: Icon,
   iconColor = "text-primary",
-  delay = 0 
+  delay = 0
 }: StatsCardProps) {
   return (
-    <div 
+    <div
       className="glass rounded-xl p-5 glow-hover animate-fade-in-up gradient-border"
       style={{ animationDelay: `${delay}ms` }}
     >

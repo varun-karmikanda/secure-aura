@@ -93,13 +93,13 @@ class UserModel {
   /**
    * Increment failed login attempts
    */
-  static async incrementFailedLogins(userId) {
+  static async incrementFailedLogins(userId, maxAttempts = 5) {
     const query = `
       UPDATE users
       SET failed_login_attempts = failed_login_attempts + 1,
           last_failed_login = CURRENT_TIMESTAMP,
           account_locked_until = CASE
-            WHEN failed_login_attempts + 1 >= 5
+            WHEN failed_login_attempts + 1 >= $2
             THEN CURRENT_TIMESTAMP + INTERVAL '2 minutes'
             ELSE account_locked_until
           END,
@@ -107,7 +107,7 @@ class UserModel {
       WHERE id = $1
       RETURNING failed_login_attempts, account_locked_until
     `;
-    const result = await pool.query(query, [userId]);
+    const result = await pool.query(query, [userId, maxAttempts]);
     return result.rows[0];
   }
 

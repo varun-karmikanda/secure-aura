@@ -74,11 +74,12 @@ app.use(attackDetection.middleware());
 const timingDefenseService = new TimingDefense(MIN_NOISE_MS, MAX_NOISE_MS);
 
 // Helper functions
-function createJwtToken(userId, username, isAdmin = false) {
+function createJwtToken(userId, username, isAdmin = false, ipAddress = null) {
   const payload = {
     user_id: userId,
     username: username,
     is_admin: isAdmin,
+    ip: ipAddress,
     exp: Math.floor(Date.now() / 1000) + JWT_EXPIRATION,
     iat: Math.floor(Date.now() / 1000)
   };
@@ -278,7 +279,7 @@ app.post('/api/auth/register',
       logger.info(`  → User creation: ${createUserTime.toFixed(2)}ms`);
 
       // Create JWT token
-      const token = createJwtToken(newUser.id, newUser.username, newUser.is_admin);
+      const token = createJwtToken(newUser.id, newUser.username, newUser.is_admin, ipAddress);
 
       // Calculate actual processing time
       const actualProcessingTime = performance.now() - startTime;
@@ -347,32 +348,51 @@ app.post('/api/auth/login',
 
     const { username, password } = req.body;
 
-    // Check username-based rate limit (prevents distributed attacks)
+    // Get security settings
+    let securitySettings = null;
     try {
       const redis = await initRedis();
-      const rateLimiter = new RateLimitMiddleware();
-      const usernameAllowed = await rateLimiter.checkUsernameRateLimit(redis, username);
-      
-      if (!usernameAllowed) {
-        await timingDefenseService.randomizedDelay();
-        const processingTime = timingDefenseService.measureExecutionTime(startTime);
-        
-        await logAuthAttempt({
-          username,
-          eventType: 'login_failure',
-          ipAddress,
-          userAgent,
-          processingTime,
-          success: false,
-          errorMessage: 'Username rate limit exceeded (distributed attack protection)'
-        });
-        
-        return res.status(403).json({ 
-          error: 'This account is temporarily protected. Please try again later.' 
-        });
+      const settingsJson = await redis.get('security:settings');
+      if (settingsJson) {
+        securitySettings = JSON.parse(settingsJson);
       }
-    } catch (error) {
-      logger.warn(`Username rate limit check failed: ${error.message}`);
+    } catch (e) {
+      logger.error(`Error fetching security settings: ${e.message}`);
+    }
+
+    const bruteForceSetting = securitySettings?.['brute-force'];
+    const bruteForceEnabled = bruteForceSetting?.enabled !== false; // Default to true
+    const maxAttempts = bruteForceEnabled ? (parseInt(bruteForceSetting?.value) || 5) : 999999;
+
+    // Check username-based rate limit (prevents distributed attacks)
+    // Only check if brute force protection is enabled
+    if (bruteForceEnabled) {
+      try {
+        const redis = await initRedis();
+        const rateLimiter = new RateLimitMiddleware();
+        const usernameAllowed = await rateLimiter.checkUsernameRateLimit(redis, username);
+        
+        if (!usernameAllowed) {
+          await timingDefenseService.randomizedDelay();
+          const processingTime = timingDefenseService.measureExecutionTime(startTime);
+          
+          await logAuthAttempt({
+            username,
+            eventType: 'login_failure',
+            ipAddress,
+            userAgent,
+            processingTime,
+            success: false,
+            errorMessage: 'Username rate limit exceeded (distributed attack protection)'
+          });
+          
+          return res.status(403).json({ 
+            error: 'This account is temporarily protected. Please try again later.' 
+          });
+        }
+      } catch (error) {
+        logger.warn(`Username rate limit check failed: ${error.message}`);
+      }
     }
 
     // Get threat level from Redis
@@ -385,8 +405,8 @@ app.post('/api/auth/login',
       const userLookupTime = performance.now() - userLookupStart;
       logger.info(`  → User lookup: ${userLookupTime.toFixed(2)}ms [${user ? 'FOUND' : 'NOT FOUND'}]`);
 
-      // Check if account is locked
-      if (user && user.account_locked_until) {
+      // Check if account is locked (only if brute force protection is enabled)
+      if (bruteForceEnabled && user && user.account_locked_until) {
         const lockedUntil = new Date(user.account_locked_until);
         if (new Date() < lockedUntil) {
           await timingDefenseService.adaptiveNoiseInjection(threatLevel);
@@ -449,7 +469,7 @@ app.post('/api/auth/login',
         await UserModel.updateLastLogin(user.id);
 
         // Create JWT token
-        const token = createJwtToken(user.id, user.username, user.is_admin);
+        const token = createJwtToken(user.id, user.username, user.is_admin, ipAddress);
 
         // Log successful login
         await logAuthAttempt({
@@ -472,7 +492,7 @@ app.post('/api/auth/login',
       } else {
         // Failed login - increment counter
         if (user) {
-          await UserModel.incrementFailedLogins(user.id);
+          await UserModel.incrementFailedLogins(user.id, maxAttempts);
         }
 
         // Log failed login
@@ -523,6 +543,38 @@ app.post('/api/auth/verify-token',
       const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
       const userId = payload.user_id;
       const username = payload.username;
+
+      // Get security settings
+      let securitySettings = null;
+      try {
+        const redis = await initRedis();
+        const settingsJson = await redis.get('security:settings');
+        if (settingsJson) {
+          securitySettings = JSON.parse(settingsJson);
+        }
+      } catch (e) {
+        logger.error(`Error fetching security settings: ${e.message}`);
+      }
+
+      // Check IP binding if JWT Auth security feature is enabled
+      const jwtAuthSetting = securitySettings?.['jwt-auth'];
+      if (jwtAuthSetting?.enabled !== false) { // Default to true
+        if (payload.ip && payload.ip !== ipAddress) {
+          logger.warn(`Token IP mismatch: Token bound to ${payload.ip}, request from ${ipAddress}`);
+          
+          await logAuthAttempt({
+            username,
+            eventType: 'token_validation_failure',
+            ipAddress,
+            userAgent: '',
+            processingTime: 0,
+            success: false,
+            errorMessage: 'Token IP mismatch (Session hijacking protection)'
+          });
+
+          return res.json({ valid: false, error: 'Invalid token (IP mismatch)' });
+        }
+      }
 
       // Verify user still exists and is active
       const user = await UserModel.findById(userId);
@@ -693,14 +745,28 @@ app.post('/api/users/:id/email', async (req, res) => {
     }
 
     const mailOptions = {
-      from: process.env.SMTP_FROM_EMAIL,
+      from: `"SecureAura" <${process.env.SMTP_FROM_EMAIL || 'noreply@secureaura.com'}>`,
       to: user.email,
       subject: subject,
       text: message
     };
 
-    await transporter.sendMail(mailOptions);
-    res.json({ message: 'Email sent successfully' });
+    try {
+      await transporter.sendMail(mailOptions);
+      res.json({ message: 'Email sent successfully' });
+    } catch (emailError) {
+      // In development, if email fails (likely auth), log it and pretend it worked
+      if (process.env.ENVIRONMENT === 'development') {
+        logger.warn(`[DEV MODE] Email sending failed: ${emailError.message}`);
+        logger.info(`[DEV MODE] Mock Email Content:
+          To: ${user.email}
+          Subject: ${subject}
+          Message: ${message}
+        `);
+        return res.json({ message: 'Email sent (Mock Mode)' });
+      }
+      throw emailError;
+    }
   } catch (error) {
     logger.error(`Error sending email: ${error.message}`);
     res.status(500).json({ error: 'Failed to send email' });
@@ -900,6 +966,114 @@ app.post('/api/admin/logout',
 
 // =============================================================================
 // END ADMIN AUTHENTICATION ROUTES
+// =============================================================================
+
+// =============================================================================
+// SECURITY SETTINGS MANAGEMENT
+// =============================================================================
+
+/**
+ * Get current security settings
+ */
+app.get('/api/admin/security/settings', async (req, res) => {
+  try {
+    const redis = await initRedis();
+    
+    // Default security settings
+    const defaultSettings = {
+      'rate-limiting': { enabled: true, value: 100 },
+      'brute-force': { enabled: true, value: 5 },
+      'jwt-auth': { enabled: true, value: 'RS256' },
+      'threat-detection': { enabled: true, value: 'active' }
+    };
+    
+    // Try to get settings from Redis
+    const settingsJson = await redis.get('security:settings');
+    const settings = settingsJson ? JSON.parse(settingsJson) : defaultSettings;
+    
+    res.json({ settings });
+  } catch (error) {
+    logger.error(`Error getting security settings: ${error.message}`);
+    res.status(500).json({ error: 'Failed to get security settings' });
+  }
+});
+
+/**
+ * Update security settings
+ */
+app.put('/api/admin/security/settings', async (req, res) => {
+  try {
+    const { settingId, enabled, value } = req.body;
+    
+    if (!settingId) {
+      return res.status(400).json({ error: 'Setting ID is required' });
+    }
+   
+    const redis = await initRedis();
+    
+    // Get current settings
+    const settingsJson = await redis.get('security:settings');
+    const settings = settingsJson ? JSON.parse(settingsJson) : {
+      'rate-limiting': { enabled: true, value: 100 },
+      'brute-force': { enabled: true, value: 5 },
+      'jwt-auth': { enabled: true, value: 'RS256' },
+      'threat-detection': { enabled: true, value: 'active' },
+      '2fa': { enabled: false, value: 'disabled' }
+    };
+    
+    // Update the specific setting
+    if (settings[settingId]) {
+      if (enabled !== undefined) settings[settingId].enabled = enabled;
+      if (value !== undefined) settings[settingId].value = value;
+    } else {
+      settings[settingId] = { enabled: enabled ?? true, value: value ?? null };
+    }
+    
+    // Save back to Redis
+    await redis.set('security:settings', JSON.stringify(settings));
+    
+    logger.info(`Security setting updated: ${settingId} = ${JSON.stringify(settings[settingId])}`);
+    
+    res.json({ 
+      message: 'Settings updated successfully',
+      settings 
+    });
+  } catch (error) {
+    logger.error(`Error updating security settings: ${error.message}`);
+    res.status(500).json({ error: 'Failed to update security settings' });
+  }
+});
+
+/**
+ * Reset security settings to defaults
+ */
+app.post('/api/admin/security/settings/reset', async (req, res) => {
+  try {
+    const redis = await initRedis();
+    
+    const defaultSettings = {
+      'rate-limiting': { enabled: true, value: 100 },
+      'brute-force': { enabled: true, value: 5 },
+      'jwt-auth': { enabled: true, value: 'RS256' },
+      'threat-detection': { enabled: true, value: 'active' }
+    };
+    
+    await redis.set('security:settings', JSON.stringify(defaultSettings));
+    
+    logger.info('Security settings reset to defaults');
+    
+    res.json({ 
+      message: 'Settings reset to defaults',
+      settings: defaultSettings 
+    });
+  } catch (error) {
+    logger.error(`Error resetting security settings: ${error.message}`);
+    res.status(500).json({ error: 'Failed to reset security settings' });
+  }
+});
+
+// =============================================================================
+// END SECURITY SETTINGS MANAGEMENT
 // =============================================================================
 
 // Error handling middleware

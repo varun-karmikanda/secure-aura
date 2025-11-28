@@ -43,7 +43,7 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-zinc-950 flex">
       {/* Sidebar */}
       <aside
         className={cn(
@@ -52,10 +52,10 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
         )}
       >
         {/* Logo */}
-        <div className="p-4 border-b border-border/50">
+        <div className="p-4 border-b border-primary/20">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-info flex items-center justify-center glow animate-pulse-glow">
-              <Zap className="w-5 h-5 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-zinc-950 flex items-center justify-center glow animate-pulse-glow">
+              <Zap className="w-5 h-5 text-primary" />
             </div>
             {!collapsed && (
               <div className="animate-fade-in">
@@ -68,7 +68,7 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
 
         {/* Admin User Info */}
         {!collapsed && user && (
-          <div className="p-3 border-b border-border/50 bg-accent/20">
+          <div className="p-3 border-b border-primary/20 bg-accent/20">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <User className="w-4 h-4 text-primary" />
@@ -92,8 +92,8 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
                 onClick={() => onTabChange(item.id)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                  "hover:bg-accent/50 group",
-                  isActive && "bg-primary/10 border border-primary/30 glow",
+                  "hover:bg-accent/50 group hover:border hover:border-primary/30",
+                  isActive && "bg-primary/10 border border-primary/50 glow",
                   !collapsed && "animate-fade-in"
                 )}
                 style={{ animationDelay: `${index * 50}ms` }}

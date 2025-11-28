@@ -4,6 +4,7 @@
 
 const crypto = require('crypto');
 const { createClient } = require('redis');
+const { SecurityEventModel } = require('./database');
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://:redis_secure_2024@localhost:6379/0';
 
@@ -67,10 +68,31 @@ class RateLimitMiddleware {
     return async (req, res, next) => {
       try {
         const redis = await initRedis();
+        
+        // Get security settings
+        const settingsJson = await redis.get('security:settings');
+        let settings = null;
+        if (settingsJson) {
+          try {
+            settings = JSON.parse(settingsJson);
+          } catch (e) {
+            console.error('Error parsing security settings:', e);
+          }
+        }
+
+        // Check if rate limiting is enabled
+        const rateLimitSetting = settings?.['rate-limiting'];
+        if (rateLimitSetting && rateLimitSetting.enabled === false) {
+          return next();
+        }
+
         const clientIp = this.getClientIp(req);
         const endpoint = req.path;
+        
+        // Use configured limit or default
+        const configuredLimit = rateLimitSetting?.value ? parseInt(rateLimitSetting.value) : this.requestsPerMinute;
 
-        const isAllowed = await this.checkRateLimit(redis, clientIp, endpoint);
+        const isAllowed = await this.checkRateLimit(redis, clientIp, endpoint, configuredLimit);
 
         if (!isAllowed) {
           return res.status(429).json({
@@ -95,7 +117,7 @@ class RateLimitMiddleware {
     return req.ip || req.connection.remoteAddress || 'unknown';
   }
 
-  async checkRateLimit(redis, clientIp, endpoint) {
+  async checkRateLimit(redis, clientIp, endpoint, limitOverride = null) {
     const key = `ratelimit:${clientIp}:${endpoint}`;
     const currentTime = Math.floor(Date.now() / 1000);
     const windowStart = currentTime - 60; // 1 minute window
@@ -117,11 +139,17 @@ class RateLimitMiddleware {
       await redis.expire(key, 120);
 
       // Endpoint-specific limits
-      let limit = this.requestsPerMinute;
+      let limit = limitOverride || this.requestsPerMinute;
+      
+      // Apply strict limits for sensitive endpoints relative to the base limit
       if (endpoint.includes('/login')) {
-        limit = 30; // 30 login attempts per minute (allows detection)
+        // If base limit is 100, login limit is 30 (30%)
+        // If base limit is changed, scale login limit proportionally but cap it
+        limit = Math.min(Math.floor(limit * 0.3), 30); 
+        if (limit < 5) limit = 5; // Minimum 5 attempts
       } else if (endpoint.includes('/register')) {
-        limit = 10; // Stricter for registration
+        limit = Math.min(Math.floor(limit * 0.1), 10);
+        if (limit < 3) limit = 3; // Minimum 3 attempts
       }
 
       // Check if under limit
@@ -234,7 +262,18 @@ class AttackDetectionMiddleware {
           try {
             const redis = await initRedis();
             const clientIp = this.getClientIp(req);
+            
+            // Record timing
             await this.recordTiming(redis, clientIp, req.path, processingTime);
+            
+            // Get settings and check for anomalies
+            const settingsJson = await redis.get('security:settings');
+            const settings = settingsJson ? JSON.parse(settingsJson) : null;
+            const threatDetectionEnabled = settings?.['threat-detection']?.enabled !== false;
+            
+            if (threatDetectionEnabled) {
+              await this.detectAnomaly(redis, clientIp, req.path, processingTime);
+            }
           } catch (error) {
             console.error('Failed to record timing data:', error);
           }
@@ -265,6 +304,50 @@ class AttackDetectionMiddleware {
       await redis.expire(key, 600); // 10 minute expiration
     } catch (error) {
       console.error('Failed to record timing data:', error);
+    }
+  }
+
+  async detectAnomaly(redis, clientIp, endpoint, currentTiming) {
+    try {
+      const key = `timing:${clientIp}:${endpoint}`;
+      // Get last 20 timings for baseline
+      const timings = await redis.lRange(key, 0, 19);
+      
+      if (timings.length < 5) return; // Need baseline
+
+      const values = timings.map(t => parseFloat(t.split(':')[1]));
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      
+      // Calculate variance and std dev
+      const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+      const stdDev = Math.sqrt(variance);
+
+      // Z-Score Analysis
+      if (stdDev > 0) {
+        const zScore = Math.abs((currentTiming - mean) / stdDev);
+        
+        // If Z-Score > 3 (3 Sigma Rule), it's a statistical anomaly (99.7% confidence)
+        if (zScore > 3) {
+          console.log(`Anomaly detected! IP: ${clientIp}, Z-Score: ${zScore.toFixed(2)}`);
+          
+          await SecurityEventModel.create({
+            eventType: 'timing_anomaly',
+            severity: 'medium',
+            ipAddress: clientIp,
+            attackVector: 'Timing Deviation',
+            confidenceScore: Math.min(0.5 + (zScore / 10), 0.99), // Scale confidence with Z-score
+            evidence: {
+              current: currentTiming,
+              mean: mean,
+              stdDev: stdDev,
+              zScore: zScore
+            },
+            mitigationApplied: 'Flagged'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Anomaly detection failed:', error);
     }
   }
 }

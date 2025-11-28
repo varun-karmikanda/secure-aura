@@ -21,7 +21,7 @@ const Index = () => {
       case "logs":
         return <SystemLogs />;
       case "security":
-        return <SecurityPanel />;
+        return <SecurityPanel onNavigate={setActiveTab} />;
       case "settings":
         return <SettingsPanel />;
       default:
