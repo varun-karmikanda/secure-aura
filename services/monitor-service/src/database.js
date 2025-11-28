@@ -37,6 +37,20 @@ class AuthLogModel {
   }
 
   /**
+   * Get recent logs (all IPs)
+   */
+  static async getRecent(limit = 50) {
+    const query = `
+      SELECT *
+      FROM auth_logs
+      ORDER BY created_at DESC
+      LIMIT $1
+    `;
+    const result = await pool.query(query, [limit]);
+    return result.rows;
+  }
+
+  /**
    * Get unique IPs from recent activity
    */
   static async getUniqueRecentIps(minutes = 10) {

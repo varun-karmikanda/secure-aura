@@ -435,6 +435,93 @@ app.get('/api/monitor/stats', async (req, res) => {
 });
 
 /**
+ * Get system logs (aggregated from auth logs and security events)
+ */
+app.get('/api/monitor/logs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const levelFilter = req.query.level || 'all';
+
+    // Fetch recent auth logs
+    const authLogs = await AuthLogModel.getRecent(limit);
+    
+    // Fetch recent security events
+    const securityEvents = await SecurityEventModel.getRecent(limit);
+
+    // Normalize auth logs
+    const normalizedAuthLogs = authLogs.map(log => {
+      let level = 'info';
+      if (!log.success) {
+        level = log.event_type === 'login_failure' ? 'error' : 'warn';
+      }
+      
+      return {
+        id: `auth-${log.id}`,
+        timestamp: log.created_at,
+        level,
+        service: 'auth',
+        message: log.success 
+          ? `User ${log.username_attempted} successfully authenticated`
+          : `Failed login attempt: ${log.username_attempted} from ${log.ip_address}`
+      };
+    });
+
+    // Normalize security events
+    const normalizedSecurityEvents = securityEvents.map(event => {
+      let level = 'info';
+      switch (event.severity) {
+        case 'critical':
+        case 'high':
+          level = 'error';
+          break;
+        case 'medium':
+          level = 'warn';
+          break;
+        default:
+          level = 'info';
+      }
+
+      return {
+        id: `sec-${event.id}`,
+        timestamp: event.created_at,
+        level,
+        service: 'monitor',
+        message: `${event.event_type.toUpperCase()}: ${event.attack_vector || 'Suspicious activity detected'}`
+      };
+    });
+
+    // Combine and sort
+    let allLogs = [...normalizedAuthLogs, ...normalizedSecurityEvents]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Filter by level if requested
+    if (levelFilter !== 'all') {
+      allLogs = allLogs.filter(log => log.level === levelFilter);
+    }
+
+    // Apply limit
+    allLogs = allLogs.slice(0, limit);
+
+    // Calculate counts
+    const counts = {
+      error: allLogs.filter(l => l.level === 'error').length,
+      warn: allLogs.filter(l => l.level === 'warn').length,
+      info: allLogs.filter(l => l.level === 'info').length,
+      debug: allLogs.filter(l => l.level === 'debug').length
+    };
+
+    res.json({
+      logs: allLogs,
+      counts
+    });
+
+  } catch (error) {
+    logger.error(`Error getting logs: ${error.message}`);
+    res.status(500).json({ error: 'Failed to get logs' });
+  }
+});
+
+/**
  * Get recent security events
  */
 app.get('/api/monitor/events', async (req, res) => {
