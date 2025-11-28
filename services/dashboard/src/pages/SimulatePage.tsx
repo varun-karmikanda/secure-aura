@@ -9,7 +9,8 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import { cn } from "@/lib/utils";
 
-const API_BASE_URL = import.meta.env.VITE_AUTH_API_URL || "http://localhost:8000";
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8000';
+const MONITOR_API_URL = import.meta.env.VITE_MONITOR_API_URL || 'http://localhost:8001';
 
 const SimulatePage = () => {
   const [logs, setLogs] = useState<string[]>([]);
@@ -127,7 +128,7 @@ const BruteForceSim = ({ addLog, setLoading, loading }: any) => {
       const password = `wrongpass${Math.floor(Math.random() * 10000)}`;
       const start = performance.now();
       try {
-        await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        await axios.post(`${AUTH_API_URL}/api/auth/login`, {
           username: "testuser1",
           password: password
         });
@@ -201,7 +202,7 @@ const CredentialStuffingSim = ({ addLog, setLoading, loading }: any) => {
 
         const start = performance.now();
         try {
-          await axios.post(`${API_BASE_URL}/api/auth/login`, {
+          await axios.post(`${AUTH_API_URL}/api/auth/login`, {
             username: username.trim(),
             password: password.trim()
           });
@@ -275,7 +276,7 @@ const UsernameEnumSim = ({ addLog, setLoading, loading }: any) => {
 
         const start = performance.now();
         try {
-          await axios.post(`${API_BASE_URL}/api/auth/login`, {
+          await axios.post(`${AUTH_API_URL}/api/auth/login`, {
             username: username.trim(),
             password: "password123" // Fixed password
           });
@@ -336,7 +337,7 @@ const TimingAttackSim = ({ addLog, setLoading, loading }: any) => {
 
     const start = performance.now();
     try {
-      await axios.post(`${API_BASE_URL}/api/auth/login`, {
+      await axios.post(`${AUTH_API_URL}/api/auth/login`, {
         username,
         password: "wrongpassword"
       });
@@ -359,7 +360,7 @@ const TimingAttackSim = ({ addLog, setLoading, loading }: any) => {
 
     const start = performance.now();
     try {
-      await axios.post(`${API_BASE_URL}/api/auth/register`, {
+      await axios.post(`${AUTH_API_URL}/api/auth/register`, {
         username,
         email,
         password: "SecurePass123!"

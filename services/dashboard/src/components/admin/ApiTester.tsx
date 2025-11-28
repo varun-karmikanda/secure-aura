@@ -45,14 +45,15 @@ const methodColors: Record<HttpMethod, string> = {
   PATCH: "bg-primary/20 text-primary border-primary/30",
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8000';
+const MONITOR_API_URL = import.meta.env.VITE_MONITOR_API_URL || 'http://localhost:8001';
 
 const secureAuraEndpoints: SavedRequest[] = [
   {
     id: "1",
     name: "Register User",
     method: "POST",
-    url: `${API_BASE_URL}/api/auth/register`,
+    url: `${MONITOR_API_URL}/api/monitor/health`,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username: "newuser" + Date.now(),
@@ -64,7 +65,7 @@ const secureAuraEndpoints: SavedRequest[] = [
     id: "2",
     name: "Login",
     method: "POST",
-    url: `${API_BASE_URL}/api/auth/login`,
+    url: `${AUTH_API_URL}/api/auth/login`,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username: "testuser",
@@ -75,7 +76,7 @@ const secureAuraEndpoints: SavedRequest[] = [
     id: "3",
     name: "Verify Token",
     method: "POST",
-    url: `${API_BASE_URL}/api/auth/verify-token`,
+    url: `${AUTH_API_URL}/api/auth/verify-token`,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       token: "{{access_token}}"
@@ -85,7 +86,7 @@ const secureAuraEndpoints: SavedRequest[] = [
     id: "4",
     name: "User Profile",
     method: "GET",
-    url: `${API_BASE_URL}/api/users/me`,
+    url: `${AUTH_API_URL}/api/users/me`,
     headers: { "Authorization": "Bearer {{access_token}}" },
     body: "",
   },
@@ -93,7 +94,7 @@ const secureAuraEndpoints: SavedRequest[] = [
     id: "5",
     name: "Auth Health Check",
     method: "GET",
-    url: `${API_BASE_URL}/health`,
+    url: `${AUTH_API_URL}/health`,
     headers: {},
     body: "",
   },

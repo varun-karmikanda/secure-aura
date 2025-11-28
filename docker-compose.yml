@@ -105,8 +105,8 @@ services:
       dockerfile: Dockerfile
     container_name: secure-aura-dashboard
     environment:
-      REACT_APP_AUTH_API_URL: http://localhost:8000
-      REACT_APP_MONITOR_API_URL: http://localhost:8001
+      VITE_AUTH_API_URL: ${VITE_AUTH_API_URL}
+      VITE_MONITOR_API_URL: ${VITE_MONITOR_API_URL}
     ports:
       - "3000:3000"
     depends_on:
