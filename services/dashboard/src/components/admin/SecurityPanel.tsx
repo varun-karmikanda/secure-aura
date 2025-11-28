@@ -14,6 +14,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8000';
+const MONITOR_API_URL = import.meta.env.VITE_MONITOR_API_URL || 'http://localhost:8001';
+
 interface SecurityFeature {
   id: string;
   name: string;
@@ -90,7 +93,7 @@ export function SecurityPanel({ onNavigate }: { onNavigate?: (tab: string) => vo
 
   const fetchThreats = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/monitor/events?limit=5');
+      const response = await fetch(`${MONITOR_API_URL}/api/monitor/events?limit=5`);
       if (response.ok) {
         const data = await response.json();
         setThreats(data.events || []);
@@ -115,7 +118,7 @@ export function SecurityPanel({ onNavigate }: { onNavigate?: (tab: string) => vo
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/admin/security/settings');
+      const response = await fetch(`${AUTH_API_URL}/api/admin/security/settings`);
       if (response.ok) {
         const data = await response.json();
         const settings = data.settings;
@@ -166,7 +169,7 @@ export function SecurityPanel({ onNavigate }: { onNavigate?: (tab: string) => vo
       const feature = securityFeatures.find(f => f.id === featureId);
       const newEnabled = !currentEnabled;
 
-      const response = await fetch('http://localhost:8000/api/admin/security/settings', {
+      const response = await fetch(`${AUTH_API_URL}/api/admin/security/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -16,6 +16,8 @@ interface AdminAuthContextType {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
+const API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8000';
+
 export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -27,7 +29,7 @@ export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
       const token = localStorage.getItem('admin_token');
       if (token) {
         try {
-          const response = await fetch('http://localhost:8000/api/admin/verify', {
+          const response = await fetch(`${API_URL}/api/admin/verify`, {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
@@ -52,7 +54,7 @@ export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const response = await fetch('http://localhost:8000/api/admin/login', {
+    const response = await fetch(`${API_URL}/api/admin/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +81,7 @@ export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
     const token = localStorage.getItem('admin_token');
     if (token) {
       try {
-        await fetch('http://localhost:8000/api/admin/logout', {
+        await fetch(`${API_URL}/api/admin/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

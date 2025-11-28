@@ -83,7 +83,8 @@ export function SystemLogs() {
   // Fetch logs from API
   const fetchLogs = async () => {
     try {
-      const url = new URL('http://localhost:8001/api/monitor/logs');
+      const baseUrl = import.meta.env.VITE_MONITOR_API_URL || 'http://localhost:8001';
+      const url = new URL(`${baseUrl}/api/monitor/logs`);
       url.searchParams.append('limit', '50');
       if (levelFilter !== 'all') {
         url.searchParams.append('level', levelFilter);
