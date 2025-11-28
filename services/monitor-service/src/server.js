@@ -517,6 +517,104 @@ app.post('/api/monitor/analyze/:ip_address', async (req, res) => {
   }
 });
 
+/**
+ * Get system logs with filtering
+ */
+app.get('/api/monitor/logs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const level = req.query.level || null;
+    const service = req.query.service || null;
+
+    // Map services from URL queries to database event types
+    const eventTypeMap = {
+      'auth': ['login_success', 'login_failure', 'register_success', 'register_failure', 'token_validation_success', 'token_validation_failure'],
+      'monitor': [], // Monitor service doesn't log to auth_logs, need to handle separately
+      'api': [], // API service doesn't log to auth_logs
+      'database': [] // Database service doesn't log to auth_logs
+    };
+
+    // Build query for fetching logs from auth_logs table
+    let whereClause = 'WHERE created_at > NOW() - INTERVAL \'24 hours\'';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Service filter: for auth service, filter by event types
+    if (service && service !== 'all') {
+      const eventTypes = eventTypeMap[service];
+      if (eventTypes && eventTypes.length > 0) {
+        whereClause += ` AND event_type = ANY($${paramIndex})`;
+        queryParams.push(eventTypes);
+        paramIndex++;
+      } else if (service === 'auth') {
+        // Auth logs (all events from auth_logs are auth service)
+        // No additional filter needed
+      } else {
+        // For non-auth services (monitor, api, database), we'll need to simulate logs
+        // or return empty for now since auth_logs only contains auth service logs
+        whereClause += ` AND 1=0`; // Return no results for non-auth services
+      }
+    }
+
+    // Get logs
+    const logsQuery = `
+      SELECT 
+        id,
+        created_at as timestamp,
+        CASE 
+          WHEN success = false THEN 'error'
+          WHEN event_type LIKE '%failure%' THEN 'warn'
+          ELSE 'info'
+        END as level,
+        'auth' as service,
+        CONCAT(event_type, ': ', COALESCE(username_attempted, 'unknown'), ' from ', ip_address) as message
+      FROM auth_logs
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex}
+    `;
+    queryParams.push(limit);
+
+    const logsResult = await pool.query(logsQuery, queryParams);
+
+    // Get counts by level
+    const countsQuery = `
+      SELECT 
+        CASE 
+          WHEN success = false THEN 'error'
+          WHEN event_type LIKE '%failure%' THEN 'warn'
+          ELSE 'info'
+        END as level,
+        COUNT(*) as count
+      FROM auth_logs
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY level
+    `;
+    const countsResult = await pool.query(countsQuery);
+
+    // Format counts
+    const counts = {
+      error: 0,
+      warn: 0,
+      info: 0,
+      debug: 0
+    };
+    countsResult.rows.forEach(row => {
+      counts[row.level] = parseInt(row.count);
+    });
+
+    res.json({
+      logs: logsResult.rows,
+      counts: counts,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`Error getting logs: ${error.message}`);
+    res.status(500).json({ error: 'Failed to get logs' });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error(`Error: ${err.message}`);

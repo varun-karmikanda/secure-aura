@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Download, 
+import {
+  Search,
+  Download,
   RefreshCw,
   Filter,
   AlertCircle,
@@ -56,53 +56,222 @@ const serviceColors = {
 };
 
 export function SystemLogs() {
-  const [logs, setLogs] = useState<LogEntry[]>(mockLogs);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [isLive, setIsLive] = useState(false);
+  const [logCounts, setLogCounts] = useState({
+    error: 0,
+    warn: 0,
+    info: 0,
+    debug: 0,
+  });
 
-  // Simulate live log streaming
+  // Format ISO timestamp to readable format
+  const formatTimestamp = (isoString: string) => {
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+  };
+
+  // Fetch logs from API
+  const fetchLogs = async () => {
+    try {
+      const url = new URL('http://localhost:8001/api/monitor/logs');
+      url.searchParams.append('limit', '50');
+      if (levelFilter !== 'all') {
+        url.searchParams.append('level', levelFilter);
+      }
+
+      const response = await fetch(url.toString());
+      if (response.ok) {
+        const data = await response.json();
+        // Format timestamps for all logs
+        const logsWithFormattedTimestamps = (data.logs || []).map((log: any) => ({
+          ...log,
+          timestamp: formatTimestamp(log.timestamp)
+        }));
+        setLogs(logsWithFormattedTimestamps);
+        setLogCounts(data.counts || { error: 0, warn: 0, info: 0, debug: 0 });
+      }
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    }
+  };
+
+  // Initial fetch and refresh when filters change
+  useEffect(() => {
+    fetchLogs();
+  }, [levelFilter]);
+
+  // Live log streaming
   useEffect(() => {
     if (!isLive) return;
-    
+
     const interval = setInterval(() => {
-      const services = ["auth", "monitor", "api", "database"] as const;
-      const levels = ["error", "warn", "info", "debug"] as const;
-      const messages = [
-        "Request processed successfully",
-        "Cache invalidated for user session",
-        "Background job completed",
-        "Webhook delivery attempted",
-        "Rate limit check passed",
-      ];
-      
-      const newLog: LogEntry = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString().replace("T", " ").slice(0, -1),
-        level: levels[Math.floor(Math.random() * 4)],
-        service: services[Math.floor(Math.random() * 4)],
-        message: messages[Math.floor(Math.random() * messages.length)],
-      };
-      
-      setLogs(prev => [newLog, ...prev.slice(0, 49)]);
+      fetchLogs();
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isLive]);
+  }, [isLive, levelFilter]);
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.message.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLevel = levelFilter === "all" || log.level === levelFilter;
-    const matchesService = serviceFilter === "all" || log.service === serviceFilter;
-    return matchesSearch && matchesLevel && matchesService;
+    return matchesSearch;
   });
 
-  const logCounts = {
-    error: logs.filter(l => l.level === "error").length,
-    warn: logs.filter(l => l.level === "warn").length,
-    info: logs.filter(l => l.level === "info").length,
-    debug: logs.filter(l => l.level === "debug").length,
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showExportMenu && !target.closest('.export-menu-container')) {
+        setShowExportMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportMenu]);
+
+  // Export logs to CSV
+  const exportToCSV = () => {
+    const logsToExport = filteredLogs.length > 0 ? filteredLogs : logs;
+
+    // CSV Headers
+    const headers = ['Timestamp', 'Level', 'Service', 'Message'];
+
+    // Convert logs to CSV rows
+    const csvRows = logsToExport.map(log => {
+      return [
+        log.timestamp,
+        log.level.toUpperCase(),
+        log.service.toUpperCase(),
+        `"${log.message.replace(/"/g, '""')}"` // Escape quotes in message
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...csvRows
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `system-logs-${timestamp}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
+  // Export logs to JSON
+  const exportToJSON = () => {
+    const logsToExport = filteredLogs.length > 0 ? filteredLogs : logs;
+
+    const jsonContent = JSON.stringify({
+      exportDate: new Date().toISOString(),
+      totalLogs: logsToExport.length,
+      counts: logCounts,
+      logs: logsToExport
+    }, null, 2);
+
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `system-logs-${timestamp}.json`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
+  // Export logs to PDF
+  const exportToPDF = () => {
+    const logsToExport = filteredLogs.length > 0 ? filteredLogs : logs;
+
+    // Create HTML content for PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>System Logs Export</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h1 { color: #333; border-bottom: 2px solid #666; padding-bottom: 10px; }
+          .meta { color: #666; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #f0f0f0; padding: 10px; text-align: left; border: 1px solid #ddd; font-weight: bold; }
+          td { padding: 8px; border: 1px solid #ddd; font-size: 12px; }
+          .error { color: #dc2626; font-weight: bold; }
+          .warn { color: #f59e0b; font-weight: bold; }
+          .info { color: #3b82f6; font-weight: bold; }
+          .debug { color: #6b7280; font-weight: bold; }
+          tr:nth-child(even) { background: #f9f9f9; }
+        </style>
+      </head>
+      <body>
+        <h1>System Logs Report</h1>
+        <div class="meta">
+          <p><strong>Export Date:</strong> ${new Date().toLocaleString()}</p>
+          <p><strong>Total Logs:</strong> ${logsToExport.length}</p>
+          <p><strong>Counts:</strong> Errors: ${logCounts.error}, Warnings: ${logCounts.warn}, Info: ${logCounts.info}, Debug: ${logCounts.debug}</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Level</th>
+              <th>Service</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logsToExport.map(log => `
+              <tr>
+                <td>${log.timestamp}</td>
+                <td class="${log.level}">${log.level.toUpperCase()}</td>
+                <td>${log.service.toUpperCase()}</td>
+                <td>${log.message}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    // Open print dialog
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+    setShowExportMenu(false);
   };
 
   return (
@@ -111,10 +280,10 @@ export function SystemLogs() {
       <div className="flex items-center justify-between animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold gradient-text">System Logs</h1>
-          <p className="text-muted-foreground mt-1">Real-time monitoring and log analysis</p>
+          {/* <p className="text-muted-foreground mt-1">Real-time monitoring and log analysis</p> */}
         </div>
         <div className="flex items-center gap-2">
-          <Button 
+          <Button
             variant={isLive ? "glow" : "outline"}
             onClick={() => setIsLive(!isLive)}
             className={cn(isLive && "animate-pulse-glow")}
@@ -122,10 +291,53 @@ export function SystemLogs() {
             <RefreshCw className={cn("w-4 h-4 mr-2", isLive && "animate-spin")} />
             {isLive ? "Live" : "Paused"}
           </Button>
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+
+          <div className="relative export-menu-container">
+            <Button
+              variant="outline"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 glass rounded-xl border border-border/50 shadow-xl z-50 overflow-hidden">
+                <div className="p-2">
+                  <button
+                    onClick={exportToCSV}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2 text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <div>
+                      <div className="font-medium">CSV</div>
+                      <div className="text-xs text-muted-foreground">Spreadsheet format</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={exportToJSON}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2 text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <div>
+                      <div className="font-medium">JSON</div>
+                      <div className="text-xs text-muted-foreground">Developer format</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={exportToPDF}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2 text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <div>
+                      <div className="font-medium">PDF</div>
+                      <div className="text-xs text-muted-foreground">Print/report format</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -135,7 +347,7 @@ export function SystemLogs() {
           const config = levelConfig[level];
           const Icon = config.icon;
           return (
-            <div 
+            <div
               key={level}
               className={cn(
                 "glass rounded-xl p-4 animate-fade-in-up cursor-pointer transition-all",
@@ -167,22 +379,6 @@ export function SystemLogs() {
             placeholder="Search logs..."
             className="pl-10 bg-muted/50 border-border/50"
           />
-        </div>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-muted/30">
-            <Server className="w-4 h-4 text-muted-foreground" />
-            <select
-              value={serviceFilter}
-              onChange={(e) => setServiceFilter(e.target.value)}
-              className="bg-transparent text-sm focus:outline-none cursor-pointer"
-            >
-              <option value="all">All Services</option>
-              <option value="auth">Auth</option>
-              <option value="monitor">Monitor</option>
-              <option value="api">API</option>
-              <option value="database">Database</option>
-            </select>
-          </div>
         </div>
       </div>
 
