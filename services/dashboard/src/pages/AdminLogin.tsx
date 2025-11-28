@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { Shield, Lock, User, AlertCircle, Loader2 } from "lucide-react";
+import { Shield, Lock, User, AlertCircle, Loader2, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,21 +34,19 @@ const AdminLogin = () => {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Effects */}
 
+
       {/* Login Card */}
       <div className="w-full max-w-md relative animate-fade-in">
         {/* Card Glow Effect */}
 
-        <div className="relative rounded bg-zinc-950 p-8 space-y-8 animate-glow">
+        <div className="relative rounded bg-zinc-950 p-8 space-y-6 animate-glow">
           {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="relative mx-auto w-20 h-20">
-              {/* <div className="absolute inset-0 bg-primary/20 rounded blur-xl animate-pulse-glow" />
-              <div className="relative w-full h-full bg-gradient-to-br from-primary to-info rounded-2xl flex items-center justify-center">
-                <Shield className="w-10 h-10 text-primary-foreground" />
-              </div> */}
+          <div className="text-center">
+            <div className="relative mx-auto w-32 h-32 flex items-center justify-center">
+              <img src="/SecureAura.png" alt="Secure Aura" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Secure Aura</h1>
+              <h1 className="text-2xl font-bold text-foreground">SecureAura</h1>
               <p className="text-muted-foreground text-sm mt-1">Admin Control Panel</p>
             </div>
           </div>
@@ -113,6 +111,17 @@ const AdminLogin = () => {
               <span>Multi-Factor Ready</span>
             </div>
           </div> */}
+          {/* Back to Home */}
+          <div className="text-center pt-2">
+            <Button
+              variant="ghost"
+              className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+              onClick={() => navigate("/")}
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              Back to Home
+            </Button>
+          </div>
         </div>
 
         {/* Demo Credentials Hint */}

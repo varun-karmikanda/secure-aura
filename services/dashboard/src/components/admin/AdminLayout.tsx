@@ -29,7 +29,6 @@ const navItems = [
   { id: "users", label: "Users", icon: Users },
   { id: "logs", label: "System Logs", icon: FileText },
   { id: "security", label: "Security", icon: Shield },
-  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutProps) {
@@ -52,14 +51,13 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
         )}
       >
         {/* Logo */}
-        <div className="p-4 border-b border-primary/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-zinc-950 flex items-center justify-center glow animate-pulse-glow">
-              <Zap className="w-5 h-5 text-primary" />
-            </div>
+        <div className="h-24 border-b border-primary/20 flex items-center justify-center">
+          <div className="flex items-center justify-center gap-3">
+
+            <img src="/SecureAura.png" alt="Secure Aura" className="w-16 h-16 object-contain pt-2" />
             {!collapsed && (
               <div className="animate-fade-in">
-                <h1 className="font-semibold text-foreground">Secure Aura</h1>
+                <h1 className="font-semibold text-foreground">SecureAura</h1>
                 <p className="text-xs text-muted-foreground">Admin Panel</p>
               </div>
             )}
@@ -118,6 +116,22 @@ export function AdminLayout({ children, activeTab, onTabChange }: AdminLayoutPro
             );
           })}
         </nav>
+
+        {/* Back to Home */}
+        <div className="p-3 border-t border-border/50 mt-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/")}
+            className={cn(
+              "w-full text-muted-foreground hover:text-foreground",
+              collapsed ? "justify-center" : "justify-start"
+            )}
+          >
+            <ChevronLeft className="w-4 h-4" />
+            {!collapsed && <span className="ml-2">Back to Home</span>}
+          </Button>
+        </div>
 
         {/* Logout Button */}
         <div className="p-3 border-t border-border/50">

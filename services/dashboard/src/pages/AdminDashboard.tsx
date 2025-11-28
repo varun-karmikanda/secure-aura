@@ -5,7 +5,6 @@ import { ApiTester } from "@/components/admin/ApiTester";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { SystemLogs } from "@/components/admin/SystemLogs";
 import { SecurityPanel } from "@/components/admin/SecurityPanel";
-import { SettingsPanel } from "@/components/admin/SettingsPanel";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -22,8 +21,6 @@ const Index = () => {
         return <SystemLogs />;
       case "security":
         return <SecurityPanel onNavigate={setActiveTab} />;
-      case "settings":
-        return <SettingsPanel />;
       default:
         return <Overview />;
     }

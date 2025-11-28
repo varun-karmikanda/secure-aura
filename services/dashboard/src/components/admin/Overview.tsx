@@ -30,8 +30,8 @@ export function Overview() {
     try {
       const [statsRes, eventsRes, timingRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/monitor/stats`),
-        axios.get(`${API_BASE_URL}/api/monitor/events?limit=10`),
-        axios.get(`${API_BASE_URL}/api/monitor/timing-analysis?limit=100`),
+        axios.get(`${API_BASE_URL}/api/monitor/events?limit=200`),
+        axios.get(`${API_BASE_URL}/api/monitor/timing-analysis?limit=200`),
       ]);
 
       setStats(statsRes.data);
@@ -95,10 +95,9 @@ export function Overview() {
     });
 
     // Convert to array for chart and format time labels
-    return Object.keys(hourlyData)
-      .sort()
-      .map((hourKey) => {
-        const data = hourlyData[hourKey];
+    return Object.values(hourlyData)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      .map((data) => {
         const hour = data.timestamp.getHours();
 
         // Format time label - just show hour
@@ -106,7 +105,7 @@ export function Overview() {
         if (hour === now.getHours() && now.getMinutes() < 30) {
           timeLabel = 'Now';
         } else {
-          timeLabel = hour.toString().padStart(2, '0');
+          timeLabel = `${hour.toString().padStart(2, '0')}:00`;
         }
 
         return {

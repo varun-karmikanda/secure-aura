@@ -67,9 +67,6 @@ export function UserManagement() {
   const adminToken = localStorage.getItem("admin_token");
 
   // New state for actions
-  const [isEmailOpen, setIsEmailOpen] = useState(false);
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ username: "", email: "" });
@@ -121,29 +118,6 @@ export function UserManagement() {
     }
   };
 
-  const handleSendEmail = async () => {
-    if (!selectedUser) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/users/${selectedUser.id}/email`, {
-        method: 'POST',
-        headers: {
-          "Authorization": `Bearer ${adminToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ subject: emailSubject, message: emailMessage })
-      });
-      if (res.ok) {
-        toast.success("Email sent successfully");
-        setIsEmailOpen(false);
-        setEmailSubject("");
-        setEmailMessage("");
-      } else {
-        toast.error("Failed to send email");
-      }
-    } catch (error) {
-      toast.error("Error sending email");
-    }
-  };
 
   const handleEditUser = async () => {
     if (!selectedUser) return;
@@ -369,7 +343,7 @@ export function UserManagement() {
       </div>
 
       {/* User Details Modal */}
-      <Dialog open={!!selectedUser} onOpenChange={() => { setSelectedUser(null); setIsEmailOpen(false); setIsEditOpen(false); }}>
+      <Dialog open={!!selectedUser} onOpenChange={() => { setSelectedUser(null); setIsEditOpen(false); }}>
         <DialogContent className="glass-strong border-border/50 max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
@@ -383,7 +357,7 @@ export function UserManagement() {
             </DialogTitle>
           </DialogHeader>
 
-          {selectedUser && !isEmailOpen && !isEditOpen && (
+          {selectedUser && !isEditOpen && (
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="glass rounded-lg p-3">
@@ -438,10 +412,7 @@ export function UserManagement() {
                     Lock Account
                   </Button>
                 )}
-                <Button variant="outline" className="flex-1" onClick={() => setIsEmailOpen(true)}>
-                  <Mail className="w-4 h-4 mr-2" />
-                  Send Email
-                </Button>
+
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" className="flex-1" onClick={() => setIsEditOpen(true)}>
@@ -454,26 +425,6 @@ export function UserManagement() {
             </div>
           )}
 
-          {selectedUser && isEmailOpen && (
-            <div className="space-y-4 mt-4">
-              <h3 className="text-lg font-medium">Send Email</h3>
-              <Input
-                placeholder="Subject"
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-              />
-              <textarea
-                className="w-full h-32 p-3 rounded-md bg-muted/50 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                placeholder="Message..."
-                value={emailMessage}
-                onChange={(e) => setEmailMessage(e.target.value)}
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setIsEmailOpen(false)}>Cancel</Button>
-                <Button onClick={handleSendEmail}>Send</Button>
-              </div>
-            </div>
-          )}
 
           {selectedUser && isEditOpen && (
             <div className="space-y-4 mt-4">

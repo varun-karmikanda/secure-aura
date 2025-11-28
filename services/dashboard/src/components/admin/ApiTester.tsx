@@ -280,7 +280,7 @@ export function ApiTester() {
         <div className="glass rounded-xl p-4 animate-slide-in-left gradient-border">
           <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
             <Folder className="w-4 h-4 text-primary" />
-            Secure Aura Endpoints
+            SecureAura Endpoints
           </h3>
           <div className="space-y-2">
             {secureAuraEndpoints.map((endpoint) => (
