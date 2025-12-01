@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { Shield, Lock, Server, Database, Terminal, Code, ChevronRight, Copy } from "lucide-react";
-import { useState } from "react";
+import { Shield, Lock, Terminal, Copy, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { HeroSection } from "@/components/landing/HeroSection";
 
 const HomePage = () => {
   return (
@@ -15,20 +15,20 @@ const HomePage = () => {
             <div className="flex items-center gap-3">
               <img src="/SecureAura.png" alt="Secure Aura" className="w-16 h-16 object-contain pt-2" />
               <h1 className="text-xl font-bold text-white tracking-tight">
-                Secure<span className="text-cyan-400">Aura</span> <span className="text-slate-500 font-normal text-sm ml-2">API Reference</span>
+                Secure<span className="text-cyan-400">Aura</span>
               </h1>
             </div>
             <div className="flex items-center gap-4">
               <Link
                 to="/simulate"
-                className="group flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg transition-all duration-200"
+                className="group flex items-center gap-2 px-4 py-2 hover:bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg transition-all duration-200"
               >
                 <Terminal className="w-4 h-4 group-hover:text-purple-300 transition-colors" />
                 <span className="font-medium">Simulation</span>
               </Link>
               <Link
                 to="/admin-aura"
-                className="group flex items-center gap-2 px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg transition-all duration-200"
+                className="group flex items-center gap-2 px-4 py-2 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg transition-all duration-200"
               >
                 <Lock className="w-4 h-4 group-hover:text-cyan-300 transition-colors" />
                 <span className="font-medium">Admin Portal</span>
@@ -38,179 +38,182 @@ const HomePage = () => {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero / Intro */}
-        <div className="mb-16 text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium mb-6">
-            <Terminal className="w-3 h-3" />
-            v1.0.0
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
-            SecureAura <span className="text-cyan-400">API</span>
-          </h1>
-          <p className="text-lg text-slate-400 leading-relaxed">
-            Comprehensive documentation for the SecureAura security platform.
-            Integrate advanced timing attack protection, real-time monitoring, and authentication services directly into your applications.
-          </p>
-        </div>
+      <main>
+        <HeroSection />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Sidebar Navigation (Desktop) */}
-          <div className="hidden lg:block lg:col-span-3 space-y-8 sticky top-24 self-start">
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider pl-3 border-l-2 border-cyan-500">
-                Services
-              </h3>
-              <nav className="space-y-1">
-                <a href="#auth-service" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
-                  Auth Service
-                </a>
-                <a href="#monitor-service" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
-                  Monitor Service
-                </a>
-                <a href="#admin-api" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
-                  Admin API
-                </a>
-              </nav>
+        {/* API Documentation Section */}
+        <div id="api-docs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 border-t border-zinc-800/50">
+          <div className="mb-16 text-center max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium mb-6">
+              <Terminal className="w-3 h-3" />
+              API Reference
             </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 tracking-tight">
+              Developer <span className="text-cyan-400">Documentation</span>
+            </h2>
+            <p className="text-lg text-slate-400 leading-relaxed">
+              Integrate advanced timing attack protection directly into your applications with our simple, secure API endpoints.
+            </p>
           </div>
 
-          {/* API Content */}
-          <div className="lg:col-span-9 space-y-16">
-
-            {/* Auth Service */}
-            <section id="auth-service" className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
-                  <Lock className="w-6 h-6 text-cyan-400" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Auth Service</h2>
-                  <p className="text-slate-400 text-sm">Authentication and user management endpoints.</p>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+            {/* Sidebar Navigation (Desktop) */}
+            <div className="hidden lg:block lg:col-span-3 space-y-8 sticky top-24 self-start">
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider pl-3 border-l-2 border-cyan-500">
+                  Services
+                </h3>
+                <nav className="space-y-1">
+                  <a href="#auth-service" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
+                    Auth Service
+                  </a>
+                  <a href="#monitor-service" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
+                    Monitor Service
+                  </a>
+                  <a href="#admin-api" className="block px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-md transition-colors">
+                    Admin API
+                  </a>
+                </nav>
               </div>
+            </div>
 
-              <div className="space-y-6">
-                <EndpointCard
-                  method="POST"
-                  path="/api/auth/register"
-                  description="Register a new user account with secure password hashing."
-                  params={[
-                    { name: "username", type: "string", required: true, desc: "Unique username" },
-                    { name: "password", type: "string", required: true, desc: "User password (min 8 chars)" },
-                    { name: "email", type: "string", required: true, desc: "Valid email address" }
-                  ]}
-                />
-                <EndpointCard
-                  method="POST"
-                  path="/api/auth/login"
-                  description="Authenticate a user and receive a JWT token. Protected against timing attacks."
-                  params={[
-                    { name: "username", type: "string", required: true, desc: "Registered username" },
-                    { name: "password", type: "string", required: true, desc: "User password" }
-                  ]}
-                />
-                <EndpointCard
-                  method="GET"
-                  path="/api/auth/verify"
-                  description="Verify the validity of a JWT token."
-                  authRequired
-                />
-              </div>
-            </section>
+            {/* API Content */}
+            <div className="lg:col-span-9 space-y-16">
 
-            {/* Monitor Service */}
-            <section id="monitor-service" className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
-                  <Activity className="w-6 h-6 text-cyan-400" />
+              {/* Auth Service */}
+              <section id="auth-service" className="space-y-6 scroll-mt-24">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <Lock className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Auth Service</h2>
+                    <p className="text-slate-400 text-sm">Authentication and user management endpoints.</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Monitor Service</h2>
-                  <p className="text-slate-400 text-sm">System health, metrics, and security event monitoring.</p>
+
+                <div className="space-y-6">
+                  <EndpointCard
+                    method="POST"
+                    path="/api/auth/register"
+                    description="Register a new user account with secure password hashing."
+                    params={[
+                      { name: "username", type: "string", required: true, desc: "Unique username" },
+                      { name: "password", type: "string", required: true, desc: "User password (min 8 chars)" },
+                      { name: "email", type: "string", required: true, desc: "Valid email address" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="POST"
+                    path="/api/auth/login"
+                    description="Authenticate a user and receive a JWT token. Protected against timing attacks."
+                    params={[
+                      { name: "username", type: "string", required: true, desc: "Registered username" },
+                      { name: "password", type: "string", required: true, desc: "User password" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="GET"
+                    path="/api/auth/verify"
+                    description="Verify the validity of a JWT token."
+                    authRequired
+                  />
                 </div>
-              </div>
+              </section>
 
-              <div className="space-y-6">
-                <EndpointCard
-                  method="GET"
-                  path="/api/monitor/stats"
-                  description="Retrieve aggregated system statistics and health metrics."
-                />
-                <EndpointCard
-                  method="GET"
-                  path="/api/monitor/events"
-                  description="List recent security events and detected threats."
-                  params={[
-                    { name: "limit", type: "number", required: false, desc: "Number of events to return (default: 50)" },
-                    { name: "severity", type: "string", required: false, desc: "Filter by severity (low, medium, high, critical)" }
-                  ]}
-                />
-                <EndpointCard
-                  method="GET"
-                  path="/api/monitor/logs"
-                  description="Fetch system authentication logs."
-                  params={[
-                    { name: "limit", type: "number", required: false, desc: "Max logs to retrieve" }
-                  ]}
-                />
-                <EndpointCard
-                  method="GET"
-                  path="/api/monitor/timing-analysis"
-                  description="Get analysis data on request timing for anomaly detection."
-                />
-              </div>
-            </section>
-
-            {/* Admin API */}
-            <section id="admin-api" className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
-                  <Shield className="w-6 h-6 text-cyan-400" />
+              {/* Monitor Service */}
+              <section id="monitor-service" className="space-y-6 scroll-mt-24">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <Activity className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Monitor Service</h2>
+                    <p className="text-slate-400 text-sm">System health, metrics, and security event monitoring.</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Admin API</h2>
-                  <p className="text-slate-400 text-sm">Administrative controls and security configuration.</p>
+
+                <div className="space-y-6">
+                  <EndpointCard
+                    method="GET"
+                    path="/api/monitor/stats"
+                    description="Retrieve aggregated system statistics and health metrics."
+                  />
+                  <EndpointCard
+                    method="GET"
+                    path="/api/monitor/events"
+                    description="List recent security events and detected threats."
+                    params={[
+                      { name: "limit", type: "number", required: false, desc: "Number of events to return (default: 50)" },
+                      { name: "severity", type: "string", required: false, desc: "Filter by severity (low, medium, high, critical)" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="GET"
+                    path="/api/monitor/logs"
+                    description="Fetch system authentication logs."
+                    params={[
+                      { name: "limit", type: "number", required: false, desc: "Max logs to retrieve" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="GET"
+                    path="/api/monitor/timing-analysis"
+                    description="Get analysis data on request timing for anomaly detection."
+                  />
                 </div>
-              </div>
+              </section>
 
-              <div className="space-y-6">
-                <EndpointCard
-                  method="POST"
-                  path="/api/auth/admin/login"
-                  description="Admin authentication endpoint."
-                  params={[
-                    { name: "username", type: "string", required: true, desc: "Admin username" },
-                    { name: "password", type: "string", required: true, desc: "Admin password" }
-                  ]}
-                />
-                <EndpointCard
-                  method="GET"
-                  path="/api/auth/admin/security/settings"
-                  description="Retrieve current security configuration settings."
-                  authRequired
-                  adminOnly
-                />
-                <EndpointCard
-                  method="PUT"
-                  path="/api/auth/admin/security/settings"
-                  description="Update security settings."
-                  authRequired
-                  adminOnly
-                  params={[
-                    { name: "settings", type: "object", required: true, desc: "JSON object with security flags" }
-                  ]}
-                />
-                <EndpointCard
-                  method="POST"
-                  path="/api/auth/admin/security/settings/reset"
-                  description="Reset all security settings to default values."
-                  authRequired
-                  adminOnly
-                />
-              </div>
-            </section>
+              {/* Admin API */}
+              <section id="admin-api" className="space-y-6 scroll-mt-24">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <Shield className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Admin API</h2>
+                    <p className="text-slate-400 text-sm">Administrative controls and security configuration.</p>
+                  </div>
+                </div>
 
+                <div className="space-y-6">
+                  <EndpointCard
+                    method="POST"
+                    path="/api/auth/admin/login"
+                    description="Admin authentication endpoint."
+                    params={[
+                      { name: "username", type: "string", required: true, desc: "Admin username" },
+                      { name: "password", type: "string", required: true, desc: "Admin password" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="GET"
+                    path="/api/auth/admin/security/settings"
+                    description="Retrieve current security configuration settings."
+                    authRequired
+                    adminOnly
+                  />
+                  <EndpointCard
+                    method="PUT"
+                    path="/api/auth/admin/security/settings"
+                    description="Update security settings."
+                    authRequired
+                    adminOnly
+                    params={[
+                      { name: "settings", type: "object", required: true, desc: "JSON object with security flags" }
+                    ]}
+                  />
+                  <EndpointCard
+                    method="POST"
+                    path="/api/auth/admin/security/settings/reset"
+                    description="Reset all security settings to default values."
+                    authRequired
+                    adminOnly
+                  />
+                </div>
+              </section>
+
+            </div>
           </div>
         </div>
       </main>
@@ -234,8 +237,6 @@ const HomePage = () => {
 };
 
 // Helper Components
-
-import { Activity } from "lucide-react";
 
 interface EndpointCardProps {
   method: "GET" | "POST" | "PUT" | "DELETE";
@@ -313,3 +314,4 @@ const EndpointCard = ({ method, path, description, authRequired, adminOnly, para
 };
 
 export default HomePage;
+

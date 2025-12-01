@@ -49,18 +49,18 @@ const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8000
 const MONITOR_API_URL = import.meta.env.VITE_MONITOR_API_URL || 'http://localhost:8001';
 
 const secureAuraEndpoints: SavedRequest[] = [
-  {
-    id: "1",
-    name: "Register User",
-    method: "POST",
-    url: `${MONITOR_API_URL}/api/monitor/health`,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: "newuser" + Date.now(),
-      email: "user" + Date.now() + "@example.com",
-      password: "SecurePass123!"
-    }, null, 2),
-  },
+  // {
+  //   id: "1",
+  //   name: "Register User",
+  //   method: "POST",
+  //   url: `${MONITOR_API_URL}/api/monitor/register`,
+  //   headers: { "Content-Type": "application/json" },
+  //   body: JSON.stringify({
+  //     username: "newuser" + Date.now(),
+  //     email: "user" + Date.now() + "@example.com",
+  //     password: "SecurePass123!"
+  //   }, null, 2),
+  // },
   {
     id: "2",
     name: "Login",
@@ -68,7 +68,7 @@ const secureAuraEndpoints: SavedRequest[] = [
     url: `${AUTH_API_URL}/api/auth/login`,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      username: "testuser",
+      username: "testuser1",
       password: "SecurePass123!"
     }, null, 2),
   },
