@@ -309,30 +309,7 @@ docker-compose up -d --no-deps --build auth-service
 
 ---
 
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/secure-aura/issues)
-- **Documentation**: See `docs/` directory
-- **Security**: Report vulnerabilities privately
-
----
-
 <div align="center">
 
-**Built with ❤️ for secure authentication**
-
-[⬆ Back to top](#️-secure-aura---timing-attack-defense-framework)
 
 </div>
